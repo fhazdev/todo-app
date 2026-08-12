@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Domain layer takes no dependencies at all: no EF, no ASP.NET, no MediatR. -->
+
+</Project>

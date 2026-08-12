@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sprout.Api/Sprout.Api.csproj" />
+    <Project Path="src/Sprout.Application/Sprout.Application.csproj" />
+    <Project Path="src/Sprout.Domain/Sprout.Domain.csproj" />
+    <Project Path="src/Sprout.Infrastructure/Sprout.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sprout.Api.Tests/Sprout.Api.Tests.csproj" />
+    <Project Path="tests/Sprout.Application.Tests/Sprout.Application.Tests.csproj" />
+    <Project Path="tests/Sprout.Domain.Tests/Sprout.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

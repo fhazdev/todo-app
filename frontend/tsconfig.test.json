@@ -1,0 +1,14 @@
+{
+  // Not part of `tsc -b`: tests are never emitted, they just need checking. Run
+  // via `npm run typecheck`, which does the app build and then this pass.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Tests run under Node, so they see both the DOM and Node's globals.
+    "types": ["jest", "node", "@testing-library/jest-dom"],
+    "esModuleInterop": true
+  },
+  // All of src, so imports from the code under test resolve.
+  "include": ["src", "jest.config.ts"],
+  "exclude": []
+}

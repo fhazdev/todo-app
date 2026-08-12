@@ -1,0 +1,81 @@
+# Sprout — production stack for the VPS.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Differences from the local stack:
+#   - no Postgres container: the database is a Neon branch, reached over TLS
+#   - Flyway runs once against Neon before the API starts
+#   - the SPA is served by nginx, which also proxies /api to the API container,
+#     so the browser only ever talks to one origin and CORS is not in play
+#
+# Every secret comes from a .env file beside this one; see .env.example.
+
+name: sprout-prod
+
+services:
+  # ── Migrations ──────────────────────────────────────────────────────────────
+  # Runs to completion and exits. The API waits for it to succeed, so a failed
+  # migration stops the deploy rather than leaving a half-migrated database
+  # serving traffic.
+  flyway:
+    image: flyway/flyway:11-alpine
+    volumes:
+      - ./db/migrations:/flyway/sql:ro
+    command:
+      - -url=${FLYWAY_JDBC_URL:?set FLYWAY_JDBC_URL to your Neon JDBC connection string}
+      - -user=${NEON_USER:?set NEON_USER}
+      - -password=${NEON_PASSWORD:?set NEON_PASSWORD}
+      - -connectRetries=10
+      - -baselineOnMigrate=true
+      - migrate
+    restart: "no"
+
+  # ── API ─────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Sprout: ${SPROUT_CONNECTION_STRING:?set SPROUT_CONNECTION_STRING to your Neon connection string}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY to a random value of at least 32 bytes}
+      Jwt__Issuer: ${JWT_ISSUER:-sprout}
+      Jwt__Audience: ${JWT_AUDIENCE:-sprout-app}
+      GoogleAuth__ClientId: ${GOOGLE_CLIENT_ID:-}
+      # nginx and the API share an origin, so no cross-origin request is ever made.
+      Cors__AllowedOrigins__0: ${PUBLIC_ORIGIN:-https://sprout.example.com}
+    # Not published to the host: only nginx reaches the API, over the internal
+    # network.
+    expose:
+      - "8080"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ── Web ─────────────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        # Same origin, so the client uses relative /api paths.
+        VITE_API_BASE_URL: ""
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # Bound to localhost: the VPS's own reverse proxy (Caddy, Traefik, or nginx
+      # on the host) terminates TLS and forwards here. Publishing 80 to the world
+      # from this container would serve the app over plain HTTP.
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

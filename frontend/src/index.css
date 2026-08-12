@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Organic design system — tokens from design_handoff_shared_todo/styles.css.
+
+   Everything the screens use is declared here as a Tailwind theme variable, so
+   components say bg-surface and text-ink rather than carrying hex literals. The
+   only colours that stay inline are the per-category ones, which come from the
+   server as part of each category.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* — core — */
+  --color-ground: #f5ead8;
+  --color-surface: #ebddc5;
+  --color-ink: #201e1d;
+  --color-accent: #c67139;
+  --color-accent-2: #7a8a5e;
+
+  /* — neutral ramp — */
+  --color-neutral-100: #f9f4ed;
+  --color-neutral-200: #eee7db;
+  --color-neutral-300: #dcd3c4;
+  --color-neutral-400: #c0b6a5;
+  --color-neutral-500: #a19786;
+  --color-neutral-600: #82796a;
+  --color-neutral-700: #645c50;
+  --color-neutral-800: #474238;
+  --color-neutral-900: #2e2b25;
+
+  /* — accent ramp — */
+  --color-accent-100: #fff2eb;
+  --color-accent-200: #ffe1d0;
+  --color-accent-300: #ffc6a5;
+  --color-accent-400: #f6a06b;
+  --color-accent-500: #d67f48;
+  --color-accent-600: #b2622d;
+  --color-accent-700: #8c491a;
+  --color-accent-800: #643312;
+  --color-accent-900: #402310;
+
+  /* — second accent ramp — */
+  --color-moss-100: #f0fae1;
+  --color-moss-200: #e1eecc;
+  --color-moss-300: #ccdbb2;
+  --color-moss-400: #aebf92;
+  --color-moss-500: #8fa073;
+  --color-moss-600: #728157;
+  --color-moss-700: #56633f;
+  --color-moss-800: #3d472b;
+  --color-moss-900: #272e1b;
+
+  /* — type — */
+  --font-heading: 'Caprasimo', ui-serif, Georgia, serif;
+  --font-body: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+
+  /* — spacing scale from the system (--space-1…8) — */
+  --spacing-s1: 4.4px;
+  --spacing-s2: 8.8px;
+  --spacing-s3: 13.2px;
+  --spacing-s4: 17.6px;
+  --spacing-s6: 26.4px;
+  --spacing-s8: 35.2px;
+
+  /* — radii — */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+  --radius-card: 26px;
+  --radius-sheet: 32px;
+
+  /* — elevation — */
+  --shadow-organic-sm: 0 1px 2px rgb(46 43 37 / 0.14);
+  --shadow-organic-md: 0 3px 10px rgb(46 43 37 / 0.16);
+  --shadow-organic-lg: 0 12px 32px rgb(46 43 37 / 0.22);
+}
+
+/* Divider and muted-text alphas, used often enough to be worth naming. */
+@theme {
+  --color-divider: rgb(32 30 29 / 0.16);
+  --color-hairline: rgb(32 30 29 / 0.08);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    /* The design is a phone screen; on a wide viewport the app sits centred in a
+       412px column rather than stretching. */
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+
+  /* The system replaces the platform focus ring everywhere. */
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgb(198 113 57 / 0.3);
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  input {
+    font: inherit;
+    color: inherit;
+    caret-color: var(--color-accent);
+  }
+
+  input::placeholder {
+    color: rgb(32 30 29 / 0.4);
+  }
+}
+
+@utility font-heading {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+/* The uppercase micro-label the system uses above grouped controls. */
+@utility label-micro {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(32 30 29 / 0.5);
+}
+
+/* Hides a scrollbar without disabling scrolling; used on the item area. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

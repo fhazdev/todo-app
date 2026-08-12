@@ -1,0 +1,40 @@
+# ── .NET ───────────────────────────────────────────────────────────────────
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+coverage*.json
+coverage*.xml
+*.coverage
+
+# ── Node ───────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Environment ────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Editors / OS ───────────────────────────────────────────────────────────
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ── Docker local volumes ───────────────────────────────────────────────────
+.docker-data/

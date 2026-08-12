@@ -1,0 +1,100 @@
+# Sprout — local development stack.
+#
+#   docker compose up -d db          start Postgres
+#   docker compose run --rm flyway   apply db/migrations
+#   docker compose up api web        run the whole app on http://localhost:5173
+#
+# Production on the VPS uses docker-compose.prod.yml, which points at Neon instead
+# of running Postgres here.
+
+name: sprout
+
+services:
+  # ── Postgres ────────────────────────────────────────────────────────────────
+  # Stands in for Neon locally. Same major version Neon runs, so the SQL in
+  # db/migrations is exercised against the engine that will run it in production.
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sprout
+      POSTGRES_PASSWORD: sprout
+      POSTGRES_DB: sprout
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sprout -d sprout"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # ── Flyway ──────────────────────────────────────────────────────────────────
+  # The only thing that changes the schema, locally and in production alike.
+  # Runs to completion and exits; the api service waits for it to succeed.
+  flyway:
+    image: flyway/flyway:11-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations:/flyway/sql:ro
+    command:
+      - -url=jdbc:postgresql://db:5432/sprout
+      - -user=sprout
+      - -password=sprout
+      - -connectRetries=10
+      - -baselineOnMigrate=true
+      - migrate
+
+  # ── API ─────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Sprout: "Host=db;Port=5432;Database=sprout;Username=sprout;Password=sprout"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:-local-development-signing-key-not-for-any-real-deployment}"
+      Jwt__Issuer: sprout
+      Jwt__Audience: sprout-app
+      GoogleAuth__ClientId: "${GOOGLE_CLIENT_ID:-}"
+      Cors__AllowedOrigins__0: "http://localhost:5173"
+      Cors__AllowedOrigins__1: "http://localhost:8081"
+    ports:
+      - "5080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  # ── Web ─────────────────────────────────────────────────────────────────────
+  # Vite dev server with hot reload. The bind mount is the app source; node_modules
+  # stays in an anonymous volume so the container's Linux binaries are not shadowed
+  # by whatever the host installed.
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: "http://localhost:5080"
+      VITE_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  db-data:
