@@ -8,14 +8,13 @@ public class ListTypeTests
     private static readonly Guid Owner = Guid.CreateVersion7();
 
     [Fact]
-    public void Create_seeds_a_single_catch_all_category()
+    public void Create_makes_a_type_with_no_categories_at_all()
     {
         var type = ListType.Create(Owner, "Reading list");
 
-        var only = type.OrderedCategories.ShouldHaveSingleItem();
-        only.Name.ShouldBe(Category.CatchAllName);
-        only.IsCatchAll.ShouldBeTrue();
-        only.Position.ShouldBe(0);
+        // Categories are opt-in. A fresh type groups nothing until asked to.
+        type.OrderedCategories.ShouldBeEmpty();
+        type.HasCategories.ShouldBeFalse();
     }
 
     [Fact]
@@ -107,33 +106,15 @@ public class ListTypeTests
     }
 
     [Fact]
-    public void The_last_category_cannot_be_removed()
+    public void The_last_category_can_be_removed_leaving_a_plain_type()
     {
-        var type = ListType.Create(Owner, "Reading list");
+        var type = ListType.CreateWithCategories(Owner, "Reading list", null, "Fiction");
 
-        Should.Throw<DomainException>(() => type.RemoveCategory(type.OrderedCategories[0].Id))
-            .Message.ShouldContain("at least one category");
-    }
+        type.RemoveCategory(type.OrderedCategories[0].Id);
 
-    [Fact]
-    public void FallbackCategoryFor_prefers_the_catch_all()
-    {
-        var type = ListType.CreateWithCategories(
-            Owner, "Default list", null, "Errands", Category.CatchAllName, "House");
-
-        var fallback = type.FallbackCategoryFor(type.OrderedCategories[0].Id);
-
-        fallback.Name.ShouldBe(Category.CatchAllName);
-    }
-
-    [Fact]
-    public void FallbackCategoryFor_falls_back_to_the_first_remaining_category()
-    {
-        var type = ListType.CreateWithCategories(Owner, "Default list", null, "Errands", "House", "Food");
-
-        var fallback = type.FallbackCategoryFor(type.OrderedCategories[0].Id);
-
-        fallback.Name.ShouldBe("House");
+        // Dropping the last one is allowed: a type with no categories is a valid type.
+        type.OrderedCategories.ShouldBeEmpty();
+        type.HasCategories.ShouldBeFalse();
     }
 
     [Theory]

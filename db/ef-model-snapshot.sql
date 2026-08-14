@@ -36,6 +36,7 @@ CREATE TABLE list_types (
     owner_id uuid NOT NULL,
     name character varying(80) NOT NULL,
     blurb character varying(120),
+    is_default boolean NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     CONSTRAINT pk_list_types PRIMARY KEY (id)
@@ -149,7 +150,7 @@ CREATE TABLE todo_items (
     id uuid NOT NULL,
     todo_list_id uuid NOT NULL,
     text character varying(500) NOT NULL,
-    category_id uuid NOT NULL,
+    category_id uuid,
     due_on date,
     is_completed boolean NOT NULL,
     completed_at timestamp with time zone,
@@ -159,6 +160,7 @@ CREATE TABLE todo_items (
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     CONSTRAINT pk_todo_items PRIMARY KEY (id),
+    CONSTRAINT fk_todo_items_categories_category_id FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE RESTRICT,
     CONSTRAINT fk_todo_items_todo_lists_todo_list_id FOREIGN KEY (todo_list_id) REFERENCES todo_lists (id) ON DELETE CASCADE
 );
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Sprout.Application.Common.Exceptions;
 using Sprout.Application.Features.ListTypes;
 using Sprout.Domain.Categories;
+using Sprout.Domain.Common;
 
 namespace Sprout.Application.Tests.Features;
 
@@ -11,14 +12,14 @@ public class ListTypeCommandTests
         new(harness.Db, harness.CurrentUser);
 
     [Fact]
-    public async Task Creating_a_type_seeds_it_with_a_catch_all_category()
+    public async Task Creating_a_type_leaves_it_without_categories()
     {
         using var harness = new TestHarness();
 
         var type = await Handlers(harness).Handle(
             new CreateListTypeCommand("Reading list", "Books to get to"), default);
 
-        type.Categories.ShouldHaveSingleItem().Name.ShouldBe(Category.CatchAllName);
+        type.Categories.ShouldBeEmpty();
         type.Blurb.ShouldBe("Books to get to");
     }
 
@@ -76,6 +77,33 @@ public class ListTypeCommandTests
     }
 
     [Fact]
+    public async Task Renaming_a_category_keeps_its_place_and_its_colour()
+    {
+        using var harness = new TestHarness();
+        var type = await harness.GivenTypeAsync("Grocery list", "Produce", "Bakery", "Dairy");
+        var bakery = type.OrderedCategories[1];
+
+        var updated = await Handlers(harness).Handle(
+            new RenameCategoryCommand(type.Id, bakery.Id, "Bread & bakery"), default);
+
+        // Renaming is not reordering: the row stays put, so no list of this type
+        // re-groups behind the user's back.
+        updated.Categories.Select(c => c.Name).ShouldBe(["Produce", "Bread & bakery", "Dairy"]);
+        updated.Categories[1].PaletteIndex.ShouldBe(bakery.PaletteIndex);
+        updated.Categories[1].Position.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_category_cannot_be_renamed_onto_a_sibling_name()
+    {
+        using var harness = new TestHarness();
+        var type = await harness.GivenTypeAsync("Grocery list", "Produce", "Bakery");
+
+        await Should.ThrowAsync<DomainException>(() => Handlers(harness).Handle(
+            new RenameCategoryCommand(type.Id, type.OrderedCategories[1].Id, "produce"), default));
+    }
+
+    [Fact]
     public async Task Moving_the_top_category_up_is_a_no_op_rather_than_an_error()
     {
         using var harness = new TestHarness();
@@ -88,22 +116,40 @@ public class ListTypeCommandTests
     }
 
     [Fact]
-    public async Task Deleting_a_category_rehomes_its_items_to_the_catch_all()
+    public async Task Deleting_a_category_leaves_its_items_uncategorised()
     {
         using var harness = new TestHarness();
-        var type = await harness.GivenTypeAsync("Reading list", Category.CatchAllName, "Fiction");
+        var type = await harness.GivenTypeAsync("Reading list", "Non-fiction", "Fiction");
         var list = await harness.GivenListAsync("Someday", type);
 
         var fiction = type.OrderedCategories.First(c => c.Name == "Fiction");
-        var catchAll = type.OrderedCategories.First(c => c.IsCatchAll);
         list.AddItem("Piranesi", fiction.Id, null, harness.UserId);
         await harness.Db.SaveChangesAsync();
 
         await Handlers(harness).Handle(new DeleteCategoryCommand(type.Id, fiction.Id), default);
         harness.Detach();
 
+        // Cleared rather than shuffled into a category nobody chose.
         var item = await harness.Db.TodoItems.SingleAsync();
-        item.CategoryId.ShouldBe(catchAll.Id);
+        item.CategoryId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Deleting_the_only_category_is_allowed_and_empties_the_type()
+    {
+        using var harness = new TestHarness();
+        var type = await harness.GivenTypeAsync("Reading list", "Fiction");
+        var list = await harness.GivenListAsync("Someday", type);
+
+        list.AddItem("Piranesi", type.OrderedCategories[0].Id, null, harness.UserId);
+        await harness.Db.SaveChangesAsync();
+
+        var updated = await Handlers(harness).Handle(
+            new DeleteCategoryCommand(type.Id, type.OrderedCategories[0].Id), default);
+        harness.Detach();
+
+        updated.Categories.ShouldBeEmpty();
+        (await harness.Db.TodoItems.SingleAsync()).CategoryId.ShouldBeNull();
     }
 
     [Fact]

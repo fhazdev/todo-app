@@ -15,15 +15,27 @@ function meta(list: TodoListSummary): string {
 }
 
 export function ListsHomeScreen() {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const { data: lists, isPending, error, refetch } = useLists()
   const navigate = useNavigate()
 
   return (
     <>
-      <header className="px-5 pt-[22px] pb-2">
-        <h1 className="font-heading text-[29px]">My lists</h1>
-        <p className="text-[12.5px] text-ink/55">{user?.email}</p>
+      <header className="flex items-start gap-3 px-5 pt-[22px] pb-2">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-heading text-[29px]">My lists</h1>
+          <p className="truncate text-[12.5px] text-ink/55">{user?.email}</p>
+        </div>
+
+        {/* Signing out clears the session, which drops RequireAuth back to the
+            sign-in screen on its own. No navigate call needed. */}
+        <Button
+          variant="ghost"
+          className="-mr-2 mt-1 shrink-0 px-2.5 text-[13px] text-ink/55 hover:text-accent"
+          onClick={() => void signOut()}
+        >
+          Sign out
+        </Button>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-4 scrollbar-none">

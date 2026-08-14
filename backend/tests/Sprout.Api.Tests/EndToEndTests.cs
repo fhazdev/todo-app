@@ -23,14 +23,19 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
         var types = await client.GetFromJsonAsync<List<ListTypeResponse>>("/api/list-types", Json);
 
         types.ShouldNotBeNull();
-        types.Select(t => t.Name).ShouldBe(["Grocery list", "Movie & show list", "Default list"]);
-        types[0].Categories.Select(c => c.Name)
+
+        // The default type leads, so the New list screen opens on the catch-all kind.
+        types.Select(t => t.Name).ShouldBe(["Default list", "Grocery list", "Movie & show list"]);
+        types.Where(t => t.IsDefault).Select(t => t.Name).ShouldBe(["Default list"]);
+
+        var grocery = types.Single(t => t.Name == "Grocery list");
+        grocery.Categories.Select(c => c.Name)
             .ShouldBe(["Fresh produce", "Bread & bakery", "Dairy", "Meat & fish", "Pantry"]);
 
         // Colours are resolved server-side; the client never derives them.
-        types[0].Categories[0].Color.ShouldBe("#c67139");
-        types[0].Categories[0].Tint.ShouldBe("#ffe1d0");
-        types[0].Categories[0].Deep.ShouldBe("#8c491a");
+        grocery.Categories[0].Color.ShouldBe("#c67139");
+        grocery.Categories[0].Tint.ShouldBe("#ffe1d0");
+        grocery.Categories[0].Deep.ShouldBe("#8c491a");
     }
 
     [Fact]
@@ -214,7 +219,7 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
     }
 
     [Fact]
-    public async Task A_new_type_starts_with_one_Uncategorised_category()
+    public async Task A_new_type_starts_with_no_categories()
     {
         var (client, _, _) = await factory.SignedInClientAsync();
 
@@ -224,7 +229,30 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
         var type = await created.Content.ReadFromJsonAsync<ListTypeResponse>(Json);
 
-        type!.Categories.ShouldHaveSingleItem().Name.ShouldBe("Uncategorised");
+        type!.Categories.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task The_default_type_ships_with_no_categories_and_its_items_stay_loose()
+    {
+        var (client, _, _) = await factory.SignedInClientAsync();
+
+        var types = await client.GetFromJsonAsync<List<ListTypeResponse>>("/api/list-types", Json);
+        var@default = types!.Single(t => t.IsDefault);
+        @default.Name.ShouldBe("Default list");
+        @default.Categories.ShouldBeEmpty();
+
+        var created = await client.PostAsJsonAsync(
+            "/api/lists", new { name = "Bits and bobs", listTypeId = @default.Id });
+        var list = await created.Content.ReadFromJsonAsync<ListDetailResponse>(Json);
+
+        await client.PostAsJsonAsync($"/api/lists/{list!.Id}/items", new { text = "Ring the vet" });
+
+        var detail = await client.GetFromJsonAsync<ListDetailResponse>($"/api/lists/{list.Id}", Json);
+        detail!.Items.ShouldHaveSingleItem().CategoryId.ShouldBeNull();
+
+        // No categories means no chrome: the list renders as a plain checklist.
+        detail.IsPlain.ShouldBeTrue();
     }
 
     [Fact]
@@ -329,9 +357,9 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
     // rather than reaching into the server's own DTOs.
     private sealed record CategoryResponse(Guid Id, string Name, int Position, string Color, string Tint, string Deep);
 
-    private sealed record ListTypeResponse(Guid Id, string Name, string? Blurb, List<CategoryResponse> Categories, int ListCount);
+    private sealed record ListTypeResponse(Guid Id, string Name, string? Blurb, List<CategoryResponse> Categories, int ListCount, bool IsDefault);
 
-    private sealed record ItemResponse(Guid Id, string Text, Guid CategoryId, DateOnly? DueOn, bool IsCompleted);
+    private sealed record ItemResponse(Guid Id, string Text, Guid? CategoryId, DateOnly? DueOn, bool IsCompleted);
 
     private sealed record MemberResponse(Guid Id, Guid? UserId, string DisplayName, string? Email, string Role, string Status);
 

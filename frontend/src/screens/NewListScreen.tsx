@@ -15,9 +15,13 @@ export function NewListScreen() {
   const [name, setName] = useState('')
   const [listTypeId, setListTypeId] = useState<string | null>(null)
 
-  // Pre-select the first type, so Create always has something valid to send.
+  // Pre-select the account's default type, so Create always has something valid to
+  // send. The server already returns it first; asking for it by name rather than by
+  // position keeps this correct if that ordering ever changes.
   useEffect(() => {
-    if (!listTypeId && types && types.length > 0) setListTypeId(types[0].id)
+    if (!listTypeId && types && types.length > 0) {
+      setListTypeId((types.find((type) => type.isDefault) ?? types[0]).id)
+    }
   }, [types, listTypeId])
 
   async function create() {
@@ -83,7 +87,9 @@ export function NewListScreen() {
                     <span className="min-w-0">
                       <span className="font-heading block text-[16px]">{type.name}</span>
                       <span className="block truncate text-[11.5px] text-ink/60">
-                        {type.categories.map((category) => category.name).join(' · ')}
+                        {type.categories.length > 0
+                          ? type.categories.map((category) => category.name).join(' · ')
+                          : (type.blurb ?? 'A plain checklist, no categories')}
                       </span>
                     </span>
                   </button>

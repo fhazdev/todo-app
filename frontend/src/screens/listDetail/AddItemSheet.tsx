@@ -7,35 +7,27 @@ interface AddItemSheetProps {
   open: boolean
   onClose: () => void
   typeName: string
+  /** Empty when the type groups nothing, in which case no picker is drawn at all. */
   categories: Category[]
-  /** Hidden on a plain list, where the type has nothing worth choosing between. */
-  showCategories: boolean
   onAdd: (input: { text: string; categoryId: string | null; dueOn: string | null }) => void
   pending?: boolean
 }
 
-export function AddItemSheet({
-  open,
-  onClose,
-  typeName,
-  categories,
-  showCategories,
-  onAdd,
-  pending,
-}: AddItemSheetProps) {
+export function AddItemSheet({ open, onClose, typeName, categories, onAdd, pending }: AddItemSheetProps) {
   const [text, setText] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [dueOn, setDueOn] = useState('')
 
-  // Reopening starts clean, with the type's first category pre-selected as the
-  // design specifies.
+  // Reopening starts clean and uncategorised. Nothing is pre-selected: filing an
+  // item is a choice, and picking one for the user makes "no category" the harder
+  // option rather than the default.
   useEffect(() => {
     if (open) {
       setText('')
       setDueOn('')
-      setCategoryId(categories[0]?.id ?? null)
+      setCategoryId(null)
     }
-  }, [open, categories])
+  }, [open])
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -62,11 +54,27 @@ export function AddItemSheet({
           className="min-h-[50px] w-full rounded-full border border-divider bg-ground px-3.5 text-sm placeholder:text-ink/40 focus-visible:border-accent"
         />
 
-        {showCategories && categories.length > 0 && (
+        {categories.length > 0 && (
           <>
             <p className="label-micro px-1">{typeName} categories</p>
 
             <div className="flex flex-wrap gap-2">
+              {/* Uncategorised is a real choice, so it gets a chip like the rest
+                  rather than being the state you land in by deselecting. */}
+              <button
+                type="button"
+                aria-pressed={categoryId === null}
+                onClick={() => setCategoryId(null)}
+                className="inline-flex min-h-[40px] items-center rounded-full border border-divider px-3.5 py-2 text-[13px] transition-colors"
+                style={
+                  categoryId === null
+                    ? { background: '#645c50', color: '#f5ead8', borderColor: '#645c50' }
+                    : { background: 'transparent', color: '#645c50' }
+                }
+              >
+                No category
+              </button>
+
               {categories.map((category) => {
                 const selected = category.id === categoryId
 

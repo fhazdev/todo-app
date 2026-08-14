@@ -40,12 +40,21 @@ public static class ItemOrdering
     /// Groups items in the type's category order. Only non-empty groups are returned,
     /// so a category with nothing in it renders no header. Within a group the items
     /// keep their insertion order.
+    /// <para>
+    /// Uncategorised items come last, in one headerless group. Items whose category
+    /// was deleted out from under them land there too: to a reader they are the same
+    /// thing, an item that belongs to no group on screen.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<CategoryGroup> Group(IEnumerable<TodoItem> items, ListType type)
     {
-        var byCategory = items
-            .OrderBy(i => i.Position)
-            .GroupBy(i => i.CategoryId)
+        var ordered = items.OrderBy(i => i.Position).ToList();
+
+        // Uncategorised items are kept out of the lookup entirely: a dictionary
+        // cannot take a null key, and they are not a group of their own anyway.
+        var byCategory = ordered
+            .Where(i => i.CategoryId is not null)
+            .GroupBy(i => i.CategoryId!.Value)
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var groups = new List<CategoryGroup>();
@@ -57,12 +66,12 @@ public static class ItemOrdering
             }
         }
 
-        // Items whose category was deleted out from under them still have to appear.
         var known = type.Categories.Select(c => c.Id).ToHashSet();
-        var orphans = byCategory.Where(kv => !known.Contains(kv.Key)).SelectMany(kv => kv.Value).ToList();
-        if (orphans.Count > 0)
+        var loose = ordered.Where(i => i.CategoryId is not { } id || !known.Contains(id)).ToList();
+
+        if (loose.Count > 0)
         {
-            groups.Add(new CategoryGroup(null, orphans));
+            groups.Add(new CategoryGroup(null, loose));
         }
 
         return groups;
@@ -74,6 +83,6 @@ public static class ItemOrdering
 
 /// <summary>
 /// One category header plus the items under it. <paramref name="Category"/> is null
-/// for the orphan group, which renders without a header.
+/// for the uncategorised group, which renders without a header.
 /// </summary>
 public readonly record struct CategoryGroup(Category? Category, IReadOnlyList<TodoItem> Items);

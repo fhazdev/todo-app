@@ -194,9 +194,9 @@ public sealed class IdentityService(
             ListType.CreateWithCategories(
                 userId, "Movie & show list", "What to watch, sorted",
                 "Films", "Series", "Documentary", "With the kids"),
-            ListType.CreateWithCategories(
-                userId, "Default list", "Anything at all",
-                "Errands", "House", "Food", "Admin"));
+            // No categories: the default kind is a plain checklist, and categories are
+            // something you add when you decide you want them.
+            ListType.Create(userId, "Default list", "Anything at all").MarkAsDefault());
 
         await db.SaveChangesAsync(ct);
     }

@@ -9,9 +9,6 @@ namespace Sprout.Domain.Categories;
 /// </summary>
 public class Category : Entity
 {
-    /// <summary>The name a type is seeded with, and the one that suppresses category chrome.</summary>
-    public const string CatchAllName = "Uncategorised";
-
     private Category() { }
 
     internal Category(Guid listTypeId, string name, int paletteIndex, int position)
@@ -33,9 +30,6 @@ public class Category : Entity
     public int Position { get; private set; }
 
     public ListType? ListType { get; private set; }
-
-    /// <summary>True when this is the type's catch-all category.</summary>
-    public bool IsCatchAll => string.Equals(Name, CatchAllName, StringComparison.OrdinalIgnoreCase);
 
     public PaletteSwatch Swatch => CategoryPalette.At(PaletteIndex);
 

@@ -21,7 +21,7 @@ public class ListAndItemTests
     // ── Adding items ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task An_item_with_no_category_takes_the_types_first_one()
+    public async Task An_item_with_no_category_stays_uncategorised()
     {
         using var h = new TestHarness();
         var type = await h.GivenTypeAsync("Grocery list", "Fresh produce", "Dairy");
@@ -29,8 +29,39 @@ public class ListAndItemTests
 
         var item = await Items(h).Handle(new AddItemCommand(list.Id, "Bananas", null, null), default);
 
-        item.CategoryId.ShouldBe(type.OrderedCategories[0].Id);
+        // Not filed into the first category on the user's behalf: categories are
+        // optional, so leaving one off is a choice rather than an omission.
+        item.CategoryId.ShouldBeNull();
         item.IsCompleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task An_item_can_be_added_to_a_type_that_has_no_categories()
+    {
+        using var h = new TestHarness();
+        var type = await h.GivenTypeAsync("Default list");
+        var list = await h.GivenListAsync("Bits and bobs", type);
+
+        var item = await Items(h).Handle(new AddItemCommand(list.Id, "Ring the vet", null, null), default);
+
+        item.CategoryId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task An_items_category_can_be_cleared_again()
+    {
+        using var h = new TestHarness();
+        var type = await h.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await h.GivenListAsync("Groceries", type);
+        var dairy = type.OrderedCategories[0].Id;
+
+        var item = await Items(h).Handle(new AddItemCommand(list.Id, "Halloumi", dairy, null), default);
+        item.CategoryId.ShouldBe(dairy);
+
+        var cleared = await Items(h).Handle(
+            new UpdateItemCommand(list.Id, item.Id, "Halloumi", null, null), default);
+
+        cleared.CategoryId.ShouldBeNull();
     }
 
     [Fact]
@@ -101,6 +132,70 @@ public class ListAndItemTests
             listHandlers.Handle(new RenameListCommand(list.Id, "Renamed by an editor"), default));
     }
 
+    // ── Deleting a list ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Deleting_a_list_takes_its_items_and_memberships_with_it()
+    {
+        using var h = new TestHarness();
+        var type = await h.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await h.GivenListAsync("Groceries", type);
+        await Items(h).Handle(new AddItemCommand(list.Id, "Halloumi", null, null), default);
+
+        await Lists(h).Handle(new DeleteListCommand(list.Id), default);
+        h.Detach();
+
+        h.Db.TodoLists.Any(l => l.Id == list.Id).ShouldBeFalse();
+        h.Db.TodoItems.Any(i => i.TodoListId == list.Id).ShouldBeFalse();
+        h.Db.ListMembers.Any(m => m.TodoListId == list.Id).ShouldBeFalse();
+
+        // The type outlives the list that used it.
+        h.Db.ListTypes.Any(t => t.Id == type.Id).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task An_editor_cannot_delete_the_list()
+    {
+        using var owner = new TestHarness();
+        var type = await owner.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await owner.GivenListAsync("Groceries", type);
+
+        using var editor = new TestHarness();
+        list.AddMember(editor.UserId, ListRole.Editor);
+        await owner.Db.SaveChangesAsync();
+
+        var handlers = new ListCommandHandlers(
+            owner.Db,
+            editor.CurrentUser,
+            new Common.Services.ListAccess(owner.Db, editor.Identity),
+            Substitute.For<IMediator>());
+
+        // 403 rather than 404 here: an editor already knows the list exists, so
+        // there is nothing left to leak by naming the real reason.
+        await Should.ThrowAsync<ForbiddenException>(() =>
+            handlers.Handle(new DeleteListCommand(list.Id), default));
+
+        owner.Db.TodoLists.Any(l => l.Id == list.Id).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_non_member_deleting_a_list_gets_not_found()
+    {
+        using var owner = new TestHarness();
+        var type = await owner.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await owner.GivenListAsync("Groceries", type);
+
+        using var stranger = new TestHarness();
+        var handlers = new ListCommandHandlers(
+            owner.Db,
+            stranger.CurrentUser,
+            new Common.Services.ListAccess(owner.Db, stranger.Identity),
+            Substitute.For<IMediator>());
+
+        await Should.ThrowAsync<NotFoundException>(() =>
+            handlers.Handle(new DeleteListCommand(list.Id), default));
+    }
+
     // ── Reading a list ────────────────────────────────────────────────────────
 
     [Fact]
@@ -150,16 +245,17 @@ public class ListAndItemTests
     }
 
     [Fact]
-    public async Task A_list_of_only_catch_all_items_reports_itself_as_plain()
+    public async Task A_list_of_uncategorised_items_reports_itself_as_plain()
     {
         using var h = new TestHarness();
-        var type = await h.GivenTypeAsync("Reading list"); // seeded with Uncategorised only
+        var type = await h.GivenTypeAsync("Reading list"); // no categories
         var list = await h.GivenListAsync("Someday", type);
         await Items(h).Handle(new AddItemCommand(list.Id, "Piranesi", null, null), default);
 
         var detail = await Queries(h).Handle(new GetListQuery(list.Id), default);
 
         detail.IsPlain.ShouldBeTrue();
+        detail.Type.Categories.ShouldBeEmpty();
     }
 
     [Fact]

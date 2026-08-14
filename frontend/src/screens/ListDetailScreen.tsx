@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   useAddItem,
+  useDeleteList,
   useList,
   useSetShowCompleted,
   useSetSort,
@@ -13,6 +14,7 @@ import { BackLink } from '@/components/layout/BackLink'
 import { EmptyState, ErrorState, RowSkeleton } from '@/components/ui/States'
 import { ItemRow } from './listDetail/ItemRow'
 import { AddItemSheet } from './listDetail/AddItemSheet'
+import { DeleteListSheet } from './listDetail/DeleteListSheet'
 import { SortSheet } from './listDetail/SortSheet'
 import { buildRows } from './listDetail/rows'
 
@@ -29,12 +31,13 @@ export function ListDetailScreen() {
   const navigate = useNavigate()
   const { data: list, isPending, error, refetch } = useList(listId)
 
-  const [sheet, setSheet] = useState<'sort' | 'add' | null>(null)
+  const [sheet, setSheet] = useState<'sort' | 'add' | 'delete' | null>(null)
 
   const toggleItem = useToggleItem(listId)
   const addItem = useAddItem(listId)
   const setSort = useSetSort(listId)
   const setShowCompleted = useSetShowCompleted(listId)
+  const deleteList = useDeleteList()
 
   const open = useMemo(() => list?.items.filter((item) => !item.isCompleted) ?? [], [list])
   const completed = useMemo(() => list?.items.filter((item) => item.isCompleted) ?? [], [list])
@@ -67,12 +70,42 @@ export function ListDetailScreen() {
       <header className="shrink-0 bg-surface px-[18px] pt-3.5 pb-3">
         <div className="flex items-start justify-between gap-3">
           <BackLink to="/lists" label="Lists" />
-          <AvatarStack
-            members={list.members}
-            size={30}
-            onClick={() => void navigate(`/lists/${list.id}/members`)}
-            className="pt-2"
-          />
+
+          <div className="flex items-center gap-1 pt-2">
+            <AvatarStack
+              members={list.members}
+              size={30}
+              onClick={() => void navigate(`/lists/${list.id}/members`)}
+            />
+
+            {/* Owner only, mirroring the server: an editor deleting the list out from
+                under everyone else is the one destructive act sharing must not allow. */}
+            {list.myRole === 'Owner' && (
+              <button
+                type="button"
+                aria-label={`Delete ${list.name}`}
+                aria-haspopup="dialog"
+                onClick={() => setSheet('delete')}
+                className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full text-ink/45 transition-colors hover:bg-ink/7 hover:text-accent-800"
+              >
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         <h1 className="font-heading mt-2 text-[26px]">{list.name}</h1>
@@ -125,6 +158,7 @@ export function ListDetailScreen() {
                 key={row.key}
                 item={row.item}
                 category={row.category}
+                showChip={row.showChip}
                 onToggle={() => toggleItem.mutate(row.item.id)}
               />
             ),
@@ -143,6 +177,8 @@ export function ListDetailScreen() {
             </button>
 
             {list.showCompleted && (
+              // The completed section is one flat list with no category headers, so
+              // rows keep their chips here whatever the sort is.
               <ul>
                 {completed.map((item) => (
                   <ItemRow
@@ -181,12 +217,31 @@ export function ListDetailScreen() {
         listTypeId={list.type.id}
       />
 
+      <DeleteListSheet
+        open={sheet === 'delete'}
+        onClose={() => {
+          deleteList.reset()
+          setSheet(null)
+        }}
+        listName={list.name}
+        itemCount={list.items.length}
+        sharedWithCount={list.members.filter((member) => !member.isYou).length}
+        pending={deleteList.isPending}
+        error={deleteList.error}
+        onConfirm={() =>
+          deleteList.mutate(list.id, {
+            // Only on success: a failed delete keeps the sheet open with the reason,
+            // rather than navigating away as though it had worked.
+            onSuccess: () => void navigate('/lists', { replace: true }),
+          })
+        }
+      />
+
       <AddItemSheet
         open={sheet === 'add'}
         onClose={() => setSheet(null)}
         typeName={list.type.name}
         categories={categories}
-        showCategories={!list.isPlain || categories.length > 1}
         pending={addItem.isPending}
         onAdd={(input) => {
           addItem.mutate(input)

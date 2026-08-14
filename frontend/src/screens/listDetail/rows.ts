@@ -13,6 +13,12 @@ export interface ItemRow {
   item: TodoItem
   /** Null on a plain list, where no category chrome is drawn at all. */
   category: Category | null
+  /**
+   * Whether the row draws its category chip. False directly under a category
+   * header, which already names the group: repeating it on every row underneath
+   * is noise. The checkbox still takes the category colour either way.
+   */
+  showChip: boolean
 }
 
 export type Row = HeaderRow | ItemRow
@@ -25,18 +31,26 @@ export type Row = HeaderRow | ItemRow
  *
  * - headers appear only when the sort is By category and the list is not plain
  * - a category with nothing in it under the current filter renders no header
+ * - a row under a header drops its chip, since the header already names the group
  * - on a plain list the chips, dots and headers all disappear, and the checkbox
  *   falls back to the accent colour
  */
 export function buildRows(list: TodoListDetail, items: TodoItem[]): Row[] {
   const categories = new Map(list.type.categories.map((category) => [category.id, category]))
 
+  /** The live category for an item, or null when it has none or it was deleted. */
+  const categoryOf = (item: TodoItem) =>
+    item.categoryId === null ? null : (categories.get(item.categoryId) ?? null)
+
+  // No headers are drawn in either case, so the chip is the only thing naming the
+  // category and it stays.
   if (list.isPlain || list.sort !== 'Category') {
     return items.map((item) => ({
       kind: 'item',
       key: item.id,
       item,
-      category: list.isPlain ? null : (categories.get(item.categoryId) ?? null),
+      category: list.isPlain ? null : categoryOf(item),
+      showChip: true,
     }))
   }
 
@@ -49,15 +63,15 @@ export function buildRows(list: TodoListDetail, items: TodoItem[]): Row[] {
     rows.push({ kind: 'header', key: `h-${category.id}`, category, count: group.length })
 
     for (const item of group) {
-      rows.push({ kind: 'item', key: item.id, item, category })
+      rows.push({ kind: 'item', key: item.id, item, category, showChip: false })
     }
   }
 
-  // Items whose category was deleted out from under them still have to show up,
-  // and they do so without a header rather than vanishing.
+  // Uncategorised items, and any whose category was deleted out from under them,
+  // trail the filed ones without a header rather than vanishing.
   for (const item of items) {
-    if (!categories.has(item.categoryId)) {
-      rows.push({ kind: 'item', key: item.id, item, category: null })
+    if (categoryOf(item) === null) {
+      rows.push({ kind: 'item', key: item.id, item, category: null, showChip: true })
     }
   }
 

@@ -28,6 +28,14 @@ public class ListType : Entity
     public string? Blurb { get; private set; }
 
     /// <summary>
+    /// The type offered first when creating a list: the catch-all kind, for a list
+    /// that is not really a grocery run or a watchlist. At most one per account,
+    /// which only the database can enforce since this aggregate cannot see its
+    /// siblings; a partial unique index on the owner does it.
+    /// </summary>
+    public bool IsDefault { get; private set; }
+
+    /// <summary>
     /// The backing collection, in whatever order it was loaded. Read
     /// <see cref="OrderedCategories"/> when the order matters, which is nearly always:
     /// this one exists so EF has a navigation it can populate.
@@ -38,15 +46,11 @@ public class ListType : Entity
     public IReadOnlyList<Category> OrderedCategories => [.. _categories.OrderBy(c => c.Position)];
 
     /// <summary>
-    /// Creates a type seeded with a single "Uncategorised" category, matching the
-    /// handoff: a fresh type starts with the catch-all and nothing else.
+    /// Creates a type with no categories at all. Categories are optional: a list of
+    /// this type is a plain checklist until someone adds one.
     /// </summary>
-    public static ListType Create(Guid ownerId, string name, string? blurb = null)
-    {
-        var type = new ListType(ownerId, name, blurb);
-        type.AddCategory(Category.CatchAllName);
-        return type;
-    }
+    public static ListType Create(Guid ownerId, string name, string? blurb = null) =>
+        new(ownerId, name, blurb);
 
     /// <summary>Creates a type with an explicit ordered category set (used for seeding defaults).</summary>
     public static ListType CreateWithCategories(Guid ownerId, string name, string? blurb, params string[] categoryNames)
@@ -57,11 +61,6 @@ public class ListType : Entity
             type.AddCategory(categoryName);
         }
 
-        if (type._categories.Count == 0)
-        {
-            type.AddCategory(Category.CatchAllName);
-        }
-
         return type;
     }
 
@@ -69,6 +68,17 @@ public class ListType : Entity
     {
         Name = NormaliseName(name);
         Touch();
+    }
+
+    /// <summary>
+    /// Marks this as the account's default type, so the New list screen offers and
+    /// preselects it. Used when seeding a new account.
+    /// </summary>
+    public ListType MarkAsDefault()
+    {
+        IsDefault = true;
+        Touch();
+        return this;
     }
 
     /// <summary>
@@ -103,33 +113,17 @@ public class ListType : Entity
     }
 
     /// <summary>
-    /// Removes a category. Callers must first move any items that referenced it,
-    /// which <see cref="FallbackCategoryFor"/> resolves. The last category cannot go:
-    /// a type always has somewhere to put an item.
+    /// Removes a category, including the last one: a type with none is a valid type.
+    /// Callers must first clear any items that referenced it, which leaves them
+    /// uncategorised.
     /// </summary>
     public void RemoveCategory(Guid categoryId)
     {
         var category = RequireCategory(categoryId);
-        if (_categories.Count == 1)
-        {
-            throw new DomainException($"{Name} needs at least one category.");
-        }
 
         _categories.Remove(category);
         Renumber();
         Touch();
-    }
-
-    /// <summary>
-    /// Where items land when <paramref name="categoryId"/> is deleted: the catch-all
-    /// if the type has one, otherwise whatever category now sits first.
-    /// </summary>
-    public Category FallbackCategoryFor(Guid categoryId)
-    {
-        var remaining = _categories.Where(c => c.Id != categoryId).OrderBy(c => c.Position).ToList();
-        return remaining.FirstOrDefault(c => c.IsCatchAll)
-            ?? remaining.FirstOrDefault()
-            ?? throw new DomainException($"{Name} needs at least one category.");
     }
 
     /// <summary>Moves a category one place towards the top. A no-op on the first row.</summary>
@@ -140,9 +134,8 @@ public class ListType : Entity
 
     public Category? FindCategory(Guid categoryId) => _categories.FirstOrDefault(c => c.Id == categoryId);
 
-    public Category FirstCategory() =>
-        _categories.OrderBy(c => c.Position).FirstOrDefault()
-        ?? throw new DomainException($"{Name} has no categories.");
+    /// <summary>True when this type groups nothing, so its lists are plain checklists.</summary>
+    public bool HasCategories => _categories.Count > 0;
 
     private void Move(Guid categoryId, int delta)
     {

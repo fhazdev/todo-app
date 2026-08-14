@@ -21,7 +21,6 @@ export interface Category {
   tint: string
   /** Chip and header text. */
   deep: string
-  isCatchAll: boolean
 }
 
 export interface ListType {
@@ -31,6 +30,8 @@ export interface ListType {
   /** Already in the type's custom order, which is what "By category" sorts on. */
   categories: Category[]
   listCount: number
+  /** The account's default kind. The server returns it first; at most one is true. */
+  isDefault: boolean
 }
 
 export interface Member {
@@ -48,7 +49,8 @@ export interface Member {
 export interface TodoItem {
   id: string
   text: string
-  categoryId: string
+  /** Null when the item is not filed under a category, which is an ordinary state. */
+  categoryId: string | null
   /** ISO date, or null when the item has no due date. */
   dueOn: string | null
   isCompleted: boolean

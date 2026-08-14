@@ -6,12 +6,18 @@ interface ItemRowProps {
   item: TodoItem
   /** Null on a plain list: no chip, no dot, accent-coloured checkbox. */
   category: Category | null
+  /**
+   * False under a category header, which already names the group. The checkbox
+   * still takes the category colour, so the row keeps its tie to the group.
+   */
+  showChip?: boolean
   onToggle: () => void
 }
 
-export function ItemRow({ item, category, onToggle }: ItemRowProps) {
+export function ItemRow({ item, category, showChip = true, onToggle }: ItemRowProps) {
   const ring = category?.color ?? PLAIN_ACCENT
   const due = formatDue(item.dueOn)
+  const chip = showChip ? category : null
 
   return (
     <li
@@ -57,19 +63,19 @@ export function ItemRow({ item, category, onToggle }: ItemRowProps) {
           {item.text}
         </p>
 
-        {(category || due) && (
+        {(chip || due) && (
           <p className="mt-[5px] flex flex-wrap items-center gap-2">
-            {category && (
+            {chip && (
               <span
                 className="inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px]"
-                style={{ background: category.tint, color: category.deep }}
+                style={{ background: chip.tint, color: chip.deep }}
               >
                 <span
                   aria-hidden
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: category.color }}
+                  style={{ background: chip.color }}
                 />
-                {category.name}
+                {chip.name}
               </span>
             )}
             {due && <span className="text-[11px] text-ink/50">{due}</span>}
