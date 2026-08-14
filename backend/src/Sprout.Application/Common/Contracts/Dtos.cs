@@ -68,10 +68,18 @@ public sealed record TodoItemDto(
     Guid? CategoryId,
     DateOnly? DueOn,
     bool IsCompleted,
-    int Position)
+    int Position,
+    int Quantity)
 {
     public static TodoItemDto From(TodoItem item) =>
-        new(item.Id, item.Text, item.CategoryId, item.DueOn, item.IsCompleted, item.Position);
+        new(
+            item.Id,
+            item.Text,
+            item.CategoryId,
+            item.DueOn,
+            item.IsCompleted,
+            item.Position,
+            item.Quantity);
 }
 
 /// <summary>

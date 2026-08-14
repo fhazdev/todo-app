@@ -33,7 +33,7 @@ export const members: Member[] = [
 ]
 
 export function item(overrides: Partial<TodoItem> & Pick<TodoItem, 'id' | 'text' | 'categoryId'>): TodoItem {
-  return { dueOn: null, isCompleted: false, position: 0, ...overrides }
+  return { dueOn: null, isCompleted: false, position: 0, quantity: 1, ...overrides }
 }
 
 /**

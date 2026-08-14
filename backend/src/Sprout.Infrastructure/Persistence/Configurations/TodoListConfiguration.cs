@@ -55,6 +55,7 @@ public sealed class TodoItemConfiguration : IEntityTypeConfiguration<TodoItem>
         // Nullable: categories are optional, so an uncategorised item is normal.
         builder.Property(i => i.CategoryId);
         builder.Property(i => i.Position).IsRequired();
+        builder.Property(i => i.Quantity).IsRequired();
 
         // No HasDefaultValue anywhere in these configurations: that marks a property
         // store-generated, and EF would then omit false from the INSERT and read it

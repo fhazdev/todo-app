@@ -3,6 +3,7 @@ using MediatR;
 using Sprout.Application.Common.Abstractions;
 using Sprout.Application.Common.Contracts;
 using Sprout.Application.Common.Services;
+using Sprout.Domain.Lists;
 using ValidationException = Sprout.Application.Common.Exceptions.ValidationException;
 
 namespace Sprout.Application.Features.Items;
@@ -21,6 +22,14 @@ public sealed record ToggleItemCommand(Guid ListId, Guid ItemId) : IRequest<Todo
 
 /// <summary>Edits an item's text, category or due date. A null category clears it.</summary>
 public sealed record UpdateItemCommand(Guid ListId, Guid ItemId, string Text, Guid? CategoryId, DateOnly? DueOn)
+    : IRequest<TodoItemDto>;
+
+/// <summary>
+/// Sets how many of an item. An absolute value rather than a delta, matching the
+/// other item edits; on a shared list the last write wins, which is the same deal
+/// as renaming.
+/// </summary>
+public sealed record SetItemQuantityCommand(Guid ListId, Guid ItemId, int Quantity)
     : IRequest<TodoItemDto>;
 
 public sealed record DeleteItemCommand(Guid ListId, Guid ItemId) : IRequest<Unit>;
@@ -43,12 +52,24 @@ public sealed class UpdateItemCommandValidator : AbstractValidator<UpdateItemCom
     }
 }
 
+public sealed class SetItemQuantityCommandValidator : AbstractValidator<SetItemQuantityCommand>
+{
+    public SetItemQuantityCommandValidator() =>
+        // Caught here as a field error so the client gets a 400 it can attach to the
+        // stepper, rather than the domain's 500-shaped complaint.
+        RuleFor(x => x.Quantity)
+            .GreaterThanOrEqualTo(TodoItem.MinQuantity)
+            .WithMessage($"Quantity cannot go below {TodoItem.MinQuantity}.")
+            .LessThanOrEqualTo(999).WithMessage("That is more than anyone needs.");
+}
+
 // ── Handlers ───────────────────────────────────────────────────────────────────
 
 public sealed class ItemCommandHandlers(IAppDbContext db, ICurrentUser currentUser, ListAccess access) :
     IRequestHandler<AddItemCommand, TodoItemDto>,
     IRequestHandler<ToggleItemCommand, TodoItemDto>,
     IRequestHandler<UpdateItemCommand, TodoItemDto>,
+    IRequestHandler<SetItemQuantityCommand, TodoItemDto>,
     IRequestHandler<DeleteItemCommand, Unit>
 {
     public async Task<TodoItemDto> Handle(AddItemCommand request, CancellationToken ct)
@@ -94,6 +115,21 @@ public sealed class ItemCommandHandlers(IAppDbContext db, ICurrentUser currentUs
 
         var item = list.RequireItem(request.ItemId);
         item.Edit(request.Text, request.CategoryId, request.DueOn);
+        list.Touch();
+        await db.SaveChangesAsync(ct);
+
+        return TodoItemDto.From(item);
+    }
+
+    public async Task<TodoItemDto> Handle(SetItemQuantityCommand request, CancellationToken ct)
+    {
+        var userId = currentUser.RequireUserId();
+        var list = await access.RequireMembershipAsync(request.ListId, userId, ct);
+
+        // Any member, not just the owner: an editor who can add items can say how
+        // many of them are wanted.
+        var item = list.RequireItem(request.ItemId);
+        item.SetQuantity(request.Quantity);
         list.Touch();
         await db.SaveChangesAsync(ct);
 

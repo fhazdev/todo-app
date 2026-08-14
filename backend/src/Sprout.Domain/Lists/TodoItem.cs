@@ -8,6 +8,9 @@ namespace Sprout.Domain.Lists;
 /// </summary>
 public class TodoItem : Entity
 {
+    /// <summary>An item is for at least one of the thing. Zero would mean "delete it".</summary>
+    public const int MinQuantity = 1;
+
     private TodoItem() { }
 
     internal TodoItem(Guid todoListId, string text, Guid? categoryId, DateOnly? dueOn, int position, Guid createdBy)
@@ -32,6 +35,9 @@ public class TodoItem : Entity
     public Guid? CategoryId { get; private set; }
 
     public DateOnly? DueOn { get; private set; }
+
+    /// <summary>How many of it. Never below <see cref="MinQuantity"/>.</summary>
+    public int Quantity { get; private set; } = MinQuantity;
 
     public bool IsCompleted { get; private set; }
 
@@ -69,6 +75,22 @@ public class TodoItem : Entity
         Text = Normalise(text);
         CategoryId = categoryId;
         DueOn = dueOn;
+        Touch();
+    }
+
+    /// <summary>
+    /// Sets how many of it. The floor is enforced here rather than by the caller, so
+    /// the stepper in the UI cannot be the only thing standing between the database
+    /// and a quantity of zero.
+    /// </summary>
+    public void SetQuantity(int quantity)
+    {
+        if (quantity < MinQuantity)
+        {
+            throw new DomainException($"An item needs a quantity of at least {MinQuantity}.");
+        }
+
+        Quantity = quantity;
         Touch();
     }
 

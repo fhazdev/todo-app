@@ -2,6 +2,9 @@ import type { Category, TodoItem } from '@/api/types'
 import { cx } from '@/lib/cx'
 import { formatDue, PLAIN_ACCENT } from './rows'
 
+/** Mirrors TodoItem.MinQuantity on the server, which is the real enforcement. */
+const MIN_QUANTITY = 1
+
 interface ItemRowProps {
   item: TodoItem
   /** Null on a plain list: no chip, no dot, accent-coloured checkbox. */
@@ -12,9 +15,17 @@ interface ItemRowProps {
    */
   showChip?: boolean
   onToggle: () => void
+  /** Omitted where the stepper does not belong, as in the completed section. */
+  onQuantityChange?: (quantity: number) => void
 }
 
-export function ItemRow({ item, category, showChip = true, onToggle }: ItemRowProps) {
+export function ItemRow({
+  item,
+  category,
+  showChip = true,
+  onToggle,
+  onQuantityChange,
+}: ItemRowProps) {
   const ring = category?.color ?? PLAIN_ACCENT
   const due = formatDue(item.dueOn)
   const chip = showChip ? category : null
@@ -82,6 +93,43 @@ export function ItemRow({ item, category, showChip = true, onToggle }: ItemRowPr
           </p>
         )}
       </div>
+
+      {onQuantityChange && (
+        <div className="flex shrink-0 items-center gap-0.5 pt-[1px]">
+          <button
+            type="button"
+            aria-label={`Fewer ${item.text}`}
+            // The floor is 1: zero of something is a deletion, which is its own action.
+            disabled={item.quantity <= MIN_QUANTITY}
+            onClick={() => onQuantityChange(item.quantity - 1)}
+            className="grid h-8 w-8 place-items-center rounded-full border border-divider bg-ground text-[15px] leading-none text-ink/70 transition-colors hover:bg-ink/7 disabled:opacity-30"
+          >
+            <span aria-hidden>−</span>
+          </button>
+
+          {/* aria-live so a screen reader hears the new count after a tap, since the
+              number is the only thing that changes. */}
+          <span
+            aria-live="polite"
+            aria-label={`Quantity ${item.quantity}`}
+            className={cx(
+              'min-w-[22px] text-center text-[13px] tabular-nums',
+              item.isCompleted ? 'text-ink/35' : 'text-ink/70',
+            )}
+          >
+            {item.quantity}
+          </span>
+
+          <button
+            type="button"
+            aria-label={`More ${item.text}`}
+            onClick={() => onQuantityChange(item.quantity + 1)}
+            className="grid h-8 w-8 place-items-center rounded-full border border-divider bg-ground text-[15px] leading-none text-ink/70 transition-colors hover:bg-ink/7"
+          >
+            <span aria-hidden>＋</span>
+          </button>
+        </div>
+      )}
     </li>
   )
 }

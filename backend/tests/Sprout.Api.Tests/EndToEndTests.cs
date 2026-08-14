@@ -39,6 +39,56 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
     }
 
     [Fact]
+    public async Task An_items_quantity_starts_at_one_and_can_be_changed()
+    {
+        var (client, _, _) = await factory.SignedInClientAsync();
+        var list = await NewListAsync(client);
+
+        var added = await client.PostAsJsonAsync(
+            $"/api/lists/{list.Id}/items", new { text = "Lettuce" });
+        var item = await added.Content.ReadFromJsonAsync<ItemResponse>(Json);
+        item!.Quantity.ShouldBe(1);
+
+        var raised = await client.PutAsJsonAsync(
+            $"/api/lists/{list.Id}/items/{item.Id}/quantity", new { quantity = 4 });
+
+        raised.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await raised.Content.ReadFromJsonAsync<ItemResponse>(Json))!.Quantity.ShouldBe(4);
+
+        var reread = await client.GetFromJsonAsync<ListDetailResponse>($"/api/lists/{list.Id}", Json);
+        reread!.Items.ShouldHaveSingleItem().Quantity.ShouldBe(4);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-2)]
+    [InlineData(1000)]
+    public async Task An_out_of_range_quantity_is_a_400_naming_the_field(int quantity)
+    {
+        var (client, _, _) = await factory.SignedInClientAsync();
+        var list = await NewListAsync(client);
+
+        var added = await client.PostAsJsonAsync(
+            $"/api/lists/{list.Id}/items", new { text = "Lettuce" });
+        var item = (await added.Content.ReadFromJsonAsync<ItemResponse>(Json))!;
+
+        await client.PutAsJsonAsync($"/api/lists/{list.Id}/items/{item.Id}/quantity", new { quantity = 3 });
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/lists/{list.Id}/items/{item.Id}/quantity", new { quantity });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // The stepper needs the message attached to the field it can show it against.
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("errors").GetProperty("quantity").GetArrayLength().ShouldBeGreaterThan(0);
+
+        // The rejected write left the last good value in place.
+        var reread = await client.GetFromJsonAsync<ListDetailResponse>($"/api/lists/{list.Id}", Json);
+        reread!.Items.ShouldHaveSingleItem().Quantity.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task An_unauthenticated_request_is_401()
     {
         var response = await factory.CreateClient().GetAsync("/api/lists");
@@ -359,7 +409,8 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
 
     private sealed record ListTypeResponse(Guid Id, string Name, string? Blurb, List<CategoryResponse> Categories, int ListCount, bool IsDefault);
 
-    private sealed record ItemResponse(Guid Id, string Text, Guid? CategoryId, DateOnly? DueOn, bool IsCompleted);
+    private sealed record ItemResponse(
+        Guid Id, string Text, Guid? CategoryId, DateOnly? DueOn, bool IsCompleted, int Quantity);
 
     private sealed record MemberResponse(Guid Id, Guid? UserId, string DisplayName, string? Email, string Role, string Status);
 

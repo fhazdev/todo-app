@@ -51,6 +51,8 @@ export interface TodoItem {
   text: string
   /** Null when the item is not filed under a category, which is an ordinary state. */
   categoryId: string | null
+  /** How many of it. Never below 1. */
+  quantity: number
   /** ISO date, or null when the item has no due date. */
   dueOn: string | null
   isCompleted: boolean

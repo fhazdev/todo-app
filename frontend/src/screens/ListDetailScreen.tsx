@@ -4,6 +4,7 @@ import {
   useAddItem,
   useDeleteList,
   useList,
+  useSetItemQuantity,
   useSetShowCompleted,
   useSetSort,
   useToggleItem,
@@ -37,6 +38,7 @@ export function ListDetailScreen() {
   const addItem = useAddItem(listId)
   const setSort = useSetSort(listId)
   const setShowCompleted = useSetShowCompleted(listId)
+  const setQuantity = useSetItemQuantity(listId)
   const deleteList = useDeleteList()
 
   const open = useMemo(() => list?.items.filter((item) => !item.isCompleted) ?? [], [list])
@@ -160,6 +162,9 @@ export function ListDetailScreen() {
                 category={row.category}
                 showChip={row.showChip}
                 onToggle={() => toggleItem.mutate(row.item.id)}
+                onQuantityChange={(quantity) =>
+                  setQuantity.mutate({ itemId: row.item.id, quantity })
+                }
               />
             ),
           )}

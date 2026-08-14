@@ -152,6 +152,7 @@ CREATE TABLE todo_items (
     text character varying(500) NOT NULL,
     category_id uuid,
     due_on date,
+    quantity integer NOT NULL,
     is_completed boolean NOT NULL,
     completed_at timestamp with time zone,
     completed_by uuid,

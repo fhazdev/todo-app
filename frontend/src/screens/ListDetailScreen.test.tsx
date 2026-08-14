@@ -51,6 +51,72 @@ function deleteCalls() {
   return fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')
 }
 
+describe('ListDetailScreen quantity', () => {
+  beforeEach(() => fetchMock.mockReset())
+
+  function quantityPuts() {
+    return fetchMock.mock.calls.filter(
+      ([url, init]) => init?.method === 'PUT' && String(url).includes('/quantity'),
+    )
+  }
+
+  it('sends the new quantity and shows it immediately', async () => {
+    serve(listDetail())
+    renderScreen()
+
+    await waitFor(() => expect(screen.getByText('Bananas')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More Bananas' }))
+
+    await waitFor(() => expect(quantityPuts()).toHaveLength(1))
+
+    const [url, init] = quantityPuts()[0]
+    expect(url).toContain('/api/lists/gro/items/i1/quantity')
+    expect(JSON.parse(init?.body as string)).toEqual({ quantity: 2 })
+  })
+
+  it('rolls the number back when the server refuses, before any refetch lands', async () => {
+    let refused = false
+
+    fetchMock.mockImplementation(async (url, init) => {
+      if (init?.method === 'PUT' && String(url).includes('/quantity')) {
+        refused = true
+
+        return {
+          ok: false,
+          status: 400,
+          headers: new Headers({ 'content-type': 'application/problem+json' }),
+          json: async () => ({ detail: 'Quantity cannot go below 1.' }),
+          text: async () => JSON.stringify({ detail: 'Quantity cannot go below 1.' }),
+        } as unknown as Response
+      }
+
+      // Once the PUT has failed, the refetch never resolves. That is what makes this
+      // a test of the rollback rather than of the refetch: with onError removed, the
+      // cache keeps the optimistic 2 and there is nothing to correct it.
+      if (refused) return new Promise<Response>(() => {})
+
+      return json(listDetail())
+    })
+
+    renderScreen()
+
+    await waitFor(() => expect(screen.getByText('Bananas')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'More Bananas' }))
+
+    await waitFor(() => expect(screen.queryByLabelText('Quantity 2')).not.toBeInTheDocument())
+  })
+
+  it('leaves completed items without a stepper', async () => {
+    serve(listDetail({ showCompleted: true }))
+    renderScreen()
+
+    // Halloumi is the completed one in the fixture.
+    await waitFor(() => expect(screen.getByText('Halloumi')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: 'More Halloumi' })).not.toBeInTheDocument()
+  })
+})
+
 describe('ListDetailScreen deletion', () => {
   beforeEach(() => fetchMock.mockReset())
 
