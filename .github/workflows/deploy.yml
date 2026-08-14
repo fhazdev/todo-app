@@ -1,0 +1,165 @@
+name: Deploy
+
+# Every merge into main ships. The chain is: tests, then images, then the server.
+# A failure at any stage stops the ones after it, so a broken build never reaches
+# the VPS.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. Queued rather than cancelled: a half-finished deploy that
+# gets cancelled mid-restart is worse than waiting.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/sprout-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/sprout-web
+
+jobs:
+  test:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    name: Build and push
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: production
+          push: true
+          # Vite bakes these into the bundle, so they are build arguments rather
+          # than runtime environment. Changing the client id means a new image.
+          build-args: |
+            VITE_API_BASE_URL=
+            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Ship to VPS
+    needs: images
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_ORIGIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open an SSH connection
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinning the host key means a swapped-out server fails the deploy
+          # rather than being trusted silently.
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Send the compose file and migrations
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p $VPS_PORT $VPS_USER@$VPS_HOST"
+
+          # Migrations are replaced rather than merged: a file deleted here has to
+          # disappear there too, or Flyway will object to a missing applied version.
+          $SSH "mkdir -p ~/sprout/db && rm -rf ~/sprout/db/migrations"
+
+          scp -i ~/.ssh/deploy_key -P "$VPS_PORT" \
+            docker-compose.deploy.yml "$VPS_USER@$VPS_HOST:~/sprout/"
+          scp -i ~/.ssh/deploy_key -P "$VPS_PORT" -r \
+            db/migrations "$VPS_USER@$VPS_HOST:~/sprout/db/"
+
+      - name: Pull and restart
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+        # The script travels over stdin, so the registry token never appears in the
+        # remote command line where `ps` would show it. Actions substitutes the
+        # ${{ }} expressions before bash ever sees the text; the quoted heredoc then
+        # stops the remote shell expanding anything else.
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd ~/sprout
+
+          echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+          export SPROUT_TAG='${{ github.sha }}'
+          docker compose -f docker-compose.deploy.yml pull
+          # Flyway runs first and must exit clean; the API will not start otherwise.
+          docker compose -f docker-compose.deploy.yml up -d --remove-orphans
+
+          docker logout ghcr.io
+          docker image prune -f
+          REMOTE
+
+      - name: Smoke test
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            if [ "$code" = "200" ]; then
+              echo "healthy after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "The API never became healthy. Recent logs:" >&2
+          docker compose -f ~/sprout/docker-compose.deploy.yml logs --tail 40 api >&2
+          exit 1
+          REMOTE
+
+      - name: Forget the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

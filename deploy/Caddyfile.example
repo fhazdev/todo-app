@@ -1,0 +1,29 @@
+# Host reverse proxy for the VPS. Copy to /etc/caddy/Caddyfile.
+#
+# TLS uses a Cloudflare Origin Certificate rather than Let's Encrypt, because the
+# hostname is proxied through Cloudflare (orange cloud). Cloudflare presents its
+# own certificate to the browser and connects back here over TLS, validating this
+# one, which is what SSL/TLS mode "Full (strict)" means.
+#
+# There is no ACME step and nothing to renew: an origin certificate is good for
+# 15 years. Generate it in the Cloudflare dashboard under SSL/TLS > Origin Server.
+
+sprout.azskymedia.net {
+    tls /etc/caddy/cloudflare/origin.pem /etc/caddy/cloudflare/origin.key
+
+    # The app container, bound to loopback by docker-compose.deploy.yml.
+    reverse_proxy 127.0.0.1:8080
+
+    # Cloudflare puts the real client address here; without this every request
+    # looks like it came from Cloudflare.
+    request_header X-Forwarded-For {http.request.header.CF-Connecting-IP}
+
+    encode gzip zstd
+
+    log {
+        output file /var/log/caddy/sprout.log {
+            roll_size 10MiB
+            roll_keep 3
+        }
+    }
+}

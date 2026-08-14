@@ -1,0 +1,70 @@
+# Sprout — what the VPS runs.
+#
+# Unlike docker-compose.prod.yml, nothing is built here. The images are built and
+# pushed by .github/workflows/deploy.yml, and this file only says which tag to run
+# and how to wire it together. The server needs no build tooling and no checkout:
+# the deploy copies this file and db/migrations across, and nothing else.
+#
+# Rolling back is a tag change:
+#   SPROUT_TAG=<previous-sha> docker compose -f docker-compose.deploy.yml up -d
+#
+# Secrets come from .env beside this file. See .env.example.
+
+name: sprout
+
+services:
+  # ── Migrations ──────────────────────────────────────────────────────────────
+  # Runs to completion and exits. The API waits for success, so a failed migration
+  # stops the deploy instead of leaving a half-migrated database serving traffic.
+  flyway:
+    image: flyway/flyway:11-alpine
+    volumes:
+      - ./db/migrations:/flyway/sql:ro
+    command:
+      - -url=${FLYWAY_JDBC_URL:?set FLYWAY_JDBC_URL to your Neon JDBC connection string}
+      - -user=${NEON_USER:?set NEON_USER}
+      - -password=${NEON_PASSWORD:?set NEON_PASSWORD}
+      - -connectRetries=10
+      - -baselineOnMigrate=true
+      - migrate
+    restart: "no"
+
+  # ── API ─────────────────────────────────────────────────────────────────────
+  api:
+    image: ghcr.io/fhazdev/sprout-api:${SPROUT_TAG:-latest}
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Sprout: ${SPROUT_CONNECTION_STRING:?set SPROUT_CONNECTION_STRING to your Neon connection string}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?set JWT_SIGNING_KEY to a random value of at least 32 bytes}
+      Jwt__Issuer: ${JWT_ISSUER:-sprout}
+      Jwt__Audience: ${JWT_AUDIENCE:-sprout-app}
+      GoogleAuth__ClientId: ${GOOGLE_CLIENT_ID:-}
+      # nginx and the API share an origin, so no cross-origin request is ever made.
+      Cors__AllowedOrigins__0: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN to the public https origin}
+    # Never published to the host: only the web container reaches it, over the
+    # internal network.
+    expose:
+      - "8080"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # ── Web ─────────────────────────────────────────────────────────────────────
+  web:
+    image: ghcr.io/fhazdev/sprout-web:${SPROUT_TAG:-latest}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # Loopback only. Caddy on the host holds the Cloudflare origin certificate
+      # and forwards here; publishing this to the world would serve plain HTTP.
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,90 @@
+name: CI
+
+# Runs on every pull request, and is called by the deploy workflow so that the
+# same checks gate production. Not triggered directly on main: a push there goes
+# through deploy.yml, which calls this first.
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    services:
+      # A real Postgres, so the schema tests actually run instead of skipping
+      # themselves. They are the only thing that catches EF and Flyway drifting
+      # apart, which makes them worth the extra service.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sprout
+          POSTGRES_PASSWORD: sprout
+          POSTGRES_DB: sprout
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sprout -d sprout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Apply Flyway migrations
+        # Flyway owns the schema, so the tests run against what production will
+        # actually have, not against anything EF generated.
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/db/migrations:/flyway/sql:ro" \
+            flyway/flyway:11-alpine \
+            -url=jdbc:postgresql://localhost:5432/sprout \
+            -user=sprout \
+            -password=sprout \
+            -connectRetries=10 \
+            migrate
+
+      - name: Test
+        working-directory: backend
+        env:
+          SPROUT_TEST_DB: Host=localhost;Port=5432;Database=sprout;Username=sprout;Password=sprout
+        run: dotnet test --nologo -v q
+
+  frontend:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
