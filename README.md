@@ -58,6 +58,12 @@ cd backend  && dotnet test    # 95 tests
 cd frontend && npm test       # 59 tests
 ```
 
+The web app also has `npm run typecheck` and `npm run lint`. Linting is type-aware,
+so it needs the same tsconfigs the build uses; the rules that earn their place are
+the ones the compiler cannot see, chiefly hook dependency arrays and unawaited
+promises. The codebase marks deliberate fire-and-forget calls with `void`, and
+`no-floating-promises` is what keeps that a rule rather than a habit.
+
 The backend suite includes tests that run against a real Postgres. They skip
 themselves when none is reachable, so `dotnet test` is green either way; start the
 database first to actually exercise them.

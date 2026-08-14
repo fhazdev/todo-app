@@ -64,7 +64,10 @@ describe('TypeCategoriesScreen', () => {
 
     const [url, init] = putCalls()[0]
     expect(url).toContain('/api/list-types/grocery/categories/dairy')
-    expect(JSON.parse(String(init?.body))).toEqual({ name: 'Dairy & eggs' })
+    // The body is always a JSON string here; BodyInit is wider than that, hence
+    // the assertion rather than String(), which would stringify an object to
+    // "[object Object]" and pass a nonsense value to JSON.parse.
+    expect(JSON.parse(init?.body as string)).toEqual({ name: 'Dairy & eggs' })
   })
 
   it('commits on Enter', async () => {

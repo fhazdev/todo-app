@@ -21,7 +21,7 @@ function withAuth(ui: ReactElement) {
 }
 
 const fetchMock = jest.fn<() => Promise<Response>>()
-globalThis.fetch = fetchMock as unknown as typeof fetch
+globalThis.fetch = fetchMock
 
 function respondWith(body: unknown) {
   fetchMock.mockResolvedValue({
