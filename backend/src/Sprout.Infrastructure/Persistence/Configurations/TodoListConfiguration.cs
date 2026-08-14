@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Sprout.Domain.Categories;
 using Sprout.Domain.Lists;
 
 namespace Sprout.Infrastructure.Persistence.Configurations;
@@ -51,16 +52,25 @@ public sealed class TodoItemConfiguration : IEntityTypeConfiguration<TodoItem>
         builder.HasKey(i => i.Id);
 
         builder.Property(i => i.Text).HasMaxLength(500).IsRequired();
-        builder.Property(i => i.CategoryId).IsRequired();
+        // Nullable: categories are optional, so an uncategorised item is normal.
+        builder.Property(i => i.CategoryId);
         builder.Property(i => i.Position).IsRequired();
 
         // No HasDefaultValue anywhere in these configurations: that marks a property
         // store-generated, and EF would then omit false from the INSERT and read it
         // back. Flyway declares the column defaults; EF always sends the real value.
 
-        // The category reference is deliberately not a navigation: an item's
-        // category belongs to the list's type, and the domain never walks from
-        // item to category. The FK is enforced in SQL.
+        // Declared as a relationship with no navigation on either side. The domain
+        // never walks from item to category, so neither entity gains a property, but
+        // EF has to know the dependency exists: without it, it cannot order a batch
+        // that clears items and deletes their category, and Postgres rejects the
+        // delete on fk_todo_items_categories_category_id. Restrict matches the SQL,
+        // which is what forces the delete path to clear items first.
+        builder.HasOne<Category>()
+            .WithMany()
+            .HasForeignKey(i => i.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(i => i.CategoryId);
         builder.HasIndex(i => new { i.TodoListId, i.Position });
         builder.HasIndex(i => new { i.TodoListId, i.IsCompleted });

@@ -56,7 +56,7 @@ public class TodoList : Entity
     /// Appends an open item. New items always land at the end of "My order" and
     /// inside their category group.
     /// </summary>
-    public TodoItem AddItem(string text, Guid categoryId, DateOnly? dueOn, Guid createdBy)
+    public TodoItem AddItem(string text, Guid? categoryId, DateOnly? dueOn, Guid createdBy)
     {
         var position = _items.Count == 0 ? 0 : _items.Max(i => i.Position) + 1;
         var item = new TodoItem(Id, text, categoryId, dueOn, position, createdBy);
@@ -140,7 +140,7 @@ public class TodoList : Entity
     /// Moves every item out of a category that is about to be deleted. Called before
     /// <see cref="ListType.RemoveCategory"/> so no item is left pointing at nothing.
     /// </summary>
-    public void ReassignCategory(Guid fromCategoryId, Guid toCategoryId)
+    public void ReassignCategory(Guid fromCategoryId, Guid? toCategoryId)
     {
         foreach (var item in _items.Where(i => i.CategoryId == fromCategoryId))
         {
@@ -151,20 +151,13 @@ public class TodoList : Entity
     }
 
     /// <summary>
-    /// The "uncategorised" rule from the handoff: when every item sits in a single
-    /// category and that category is the type's catch-all, the list shows no category
-    /// chrome at all. An empty list counts as plain too.
+    /// The "uncategorised" rule from the handoff: a list shows no category chrome at
+    /// all when nothing on it sits in a category the type still has. That covers an
+    /// empty list, a list whose items are all uncategorised, and one whose categories
+    /// were deleted out from under it. A single filed item brings the grouping back.
     /// </summary>
-    public static bool IsPlain(IEnumerable<TodoItem> items, ListType type)
-    {
-        var used = items.Select(i => i.CategoryId).Distinct().ToList();
-        return used.Count switch
-        {
-            0 => true,
-            > 1 => false,
-            _ => type.FindCategory(used[0]) is not { } category || category.IsCatchAll,
-        };
-    }
+    public static bool IsPlain(IEnumerable<TodoItem> items, ListType type) =>
+        !items.Any(i => i.CategoryId is { } id && type.FindCategory(id) is not null);
 
     private static string NormaliseName(string name)
     {

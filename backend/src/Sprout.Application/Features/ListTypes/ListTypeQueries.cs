@@ -23,7 +23,10 @@ public sealed class ListTypeQueryHandlers(IAppDbContext db, ICurrentUser current
         var types = await db.ListTypes
             .Include(t => t.Categories)
             .Where(t => t.OwnerId == userId)
-            .OrderBy(t => t.CreatedAt)
+            // The default type leads, so "New list" opens on the catch-all kind
+            // rather than on whichever type happened to be seeded first.
+            .OrderByDescending(t => t.IsDefault)
+            .ThenBy(t => t.CreatedAt)
             .AsNoTracking()
             .ToListAsync(ct);
 

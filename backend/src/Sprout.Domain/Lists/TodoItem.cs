@@ -10,7 +10,7 @@ public class TodoItem : Entity
 {
     private TodoItem() { }
 
-    internal TodoItem(Guid todoListId, string text, Guid categoryId, DateOnly? dueOn, int position, Guid createdBy)
+    internal TodoItem(Guid todoListId, string text, Guid? categoryId, DateOnly? dueOn, int position, Guid createdBy)
     {
         TodoListId = todoListId;
         Text = Normalise(text);
@@ -24,8 +24,12 @@ public class TodoItem : Entity
 
     public string Text { get; private set; } = string.Empty;
 
-    /// <summary>A category belonging to the list's type. Never null: the type always has a catch-all.</summary>
-    public Guid CategoryId { get; private set; }
+    /// <summary>
+    /// A category belonging to the list's type, or null when the item is not filed
+    /// under one. Categories are optional, so null is an ordinary state rather than
+    /// missing data.
+    /// </summary>
+    public Guid? CategoryId { get; private set; }
 
     public DateOnly? DueOn { get; private set; }
 
@@ -60,7 +64,7 @@ public class TodoItem : Entity
         return IsCompleted;
     }
 
-    public void Edit(string text, Guid categoryId, DateOnly? dueOn)
+    public void Edit(string text, Guid? categoryId, DateOnly? dueOn)
     {
         Text = Normalise(text);
         CategoryId = categoryId;
@@ -68,7 +72,7 @@ public class TodoItem : Entity
         Touch();
     }
 
-    internal void MoveToCategory(Guid categoryId)
+    internal void MoveToCategory(Guid? categoryId)
     {
         CategoryId = categoryId;
         Touch();

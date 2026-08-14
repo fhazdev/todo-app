@@ -27,7 +27,11 @@ builder.Services
         // Enums cross the wire as their names ("Category", "MyOrder"), so the
         // TypeScript client can use a string union rather than magic numbers.
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+
+        // Nulls are written, not omitted. A missing categoryId and a null one would
+        // otherwise be indistinguishable on the client, and "no category" is a real
+        // answer rather than an absent one. The TypeScript types say `| null`
+        // throughout, so the wire should say it too.
     });
 
 builder.Services.AddProblemDetails();

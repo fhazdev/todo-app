@@ -143,6 +143,26 @@ export function useCreateList() {
   })
 }
 
+/**
+ * Deleting a list, which the server allows the owner only. The list's own caches are
+ * dropped rather than invalidated: refetching a list that no longer exists would
+ * only produce a 404 behind the screen that is already navigating away.
+ */
+export function useDeleteList() {
+  const client = useQueryClient()
+
+  return useMutation({
+    mutationFn: (listId: string) => api.delete<void>(`/api/lists/${listId}`),
+    onSuccess: (_result, listId) => {
+      client.removeQueries({ queryKey: keys.list(listId) })
+      client.removeQueries({ queryKey: keys.members(listId) })
+      void client.invalidateQueries({ queryKey: keys.lists })
+      // The types screen counts how many lists use each type.
+      void client.invalidateQueries({ queryKey: keys.types })
+    },
+  })
+}
+
 export function useSetSort(listId: string) {
   const client = useQueryClient()
 

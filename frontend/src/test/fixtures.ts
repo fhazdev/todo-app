@@ -2,9 +2,9 @@ import type { Category, ListType, Member, TodoItem, TodoListDetail, TodoListSumm
 
 /** The Grocery list type from the handoff, colours and all. */
 export const groceryCategories: Category[] = [
-  { id: 'produce', name: 'Fresh produce', position: 0, paletteIndex: 0, color: '#c67139', tint: '#ffe1d0', deep: '#8c491a', isCatchAll: false },
-  { id: 'bakery', name: 'Bread & bakery', position: 1, paletteIndex: 1, color: '#7a8a5e', tint: '#e1eecc', deep: '#56633f', isCatchAll: false },
-  { id: 'dairy', name: 'Dairy', position: 2, paletteIndex: 2, color: '#b2622d', tint: '#fff2eb', deep: '#643312', isCatchAll: false },
+  { id: 'produce', name: 'Fresh produce', position: 0, paletteIndex: 0, color: '#c67139', tint: '#ffe1d0', deep: '#8c491a' },
+  { id: 'bakery', name: 'Bread & bakery', position: 1, paletteIndex: 1, color: '#7a8a5e', tint: '#e1eecc', deep: '#56633f' },
+  { id: 'dairy', name: 'Dairy', position: 2, paletteIndex: 2, color: '#b2622d', tint: '#fff2eb', deep: '#643312' },
 ]
 
 export const groceryType: ListType = {
@@ -13,16 +13,17 @@ export const groceryType: ListType = {
   blurb: 'Aisles you shop in',
   categories: groceryCategories,
   listCount: 1,
+  isDefault: false,
 }
 
-export const catchAllType: ListType = {
+/** A type that groups nothing, as the Default list does. Its lists are plain. */
+export const plainType: ListType = {
   id: 'reading',
   name: 'Reading list',
   blurb: null,
-  categories: [
-    { id: 'uncategorised', name: 'Uncategorised', position: 0, paletteIndex: 0, color: '#c67139', tint: '#ffe1d0', deep: '#8c491a', isCatchAll: true },
-  ],
+  categories: [],
   listCount: 1,
+  isDefault: false,
 }
 
 export const members: Member[] = [

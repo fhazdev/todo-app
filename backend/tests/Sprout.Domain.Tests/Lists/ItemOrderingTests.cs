@@ -142,6 +142,49 @@ public class ItemOrderingTests
         var orphans = groups.ShouldHaveSingleItem(g => g.Category is null);
         orphans.Items.ShouldHaveSingleItem().Text.ShouldBe("Olive oil");
     }
+
+    [Fact]
+    public void Uncategorised_items_group_together_at_the_end_without_a_header()
+    {
+        var (list, type) = Grocery();
+        list.AddItem("Batteries", null, null, Actor);
+        list.AddItem("Stamps", null, null, Actor);
+
+        var groups = ItemOrdering.Group(list.Items, type);
+
+        // Last, so the filed items keep the top of the list.
+        groups[^1].Category.ShouldBeNull();
+        groups[^1].Items.Select(i => i.Text).ShouldBe(["Batteries", "Stamps"]);
+    }
+
+    [Fact]
+    public void Uncategorised_and_orphaned_items_share_the_one_headerless_group()
+    {
+        var (list, type) = Grocery();
+        list.AddItem("Batteries", null, null, Actor);
+        type.RemoveCategory(type.OrderedCategories.First(c => c.Name == "Pantry").Id);
+
+        var groups = ItemOrdering.Group(list.Items, type);
+
+        // To a reader they are the same thing: an item under no header.
+        var loose = groups.ShouldHaveSingleItem(g => g.Category is null);
+        loose.Items.Select(i => i.Text).ShouldBe(["Olive oil", "Batteries"]);
+    }
+
+    [Fact]
+    public void A_type_with_no_categories_puts_everything_in_one_headerless_group()
+    {
+        var type = ListType.Create(Owner, "Default list");
+        var list = TodoList.Create(Owner, "Bits and bobs", type.Id);
+        list.AddItem("Ring the vet", null, null, Actor);
+        list.AddItem("Book the MOT", null, null, Actor);
+
+        var groups = ItemOrdering.Group(list.Items, type);
+
+        groups.ShouldHaveSingleItem().Category.ShouldBeNull();
+        ItemOrdering.Sort(list.Items, type, SortMode.Category)
+            .Select(i => i.Text).ShouldBe(["Ring the vet", "Book the MOT"]);
+    }
 }
 
 file static class ShouldlyHelpers

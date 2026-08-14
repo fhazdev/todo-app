@@ -151,15 +151,16 @@ public sealed class ListTypeCommandHandlers(IAppDbContext db, ICurrentUser curre
         var userId = currentUser.RequireUserId();
         var type = await RequireOwnedTypeAsync(request.ListTypeId, userId, ct);
 
-        // Rehome the orphans before the category goes, so no item is left dangling.
-        var fallback = type.FallbackCategoryFor(request.CategoryId);
+        // Clear the items before the category goes, so none is left pointing at a row
+        // that no longer exists. They become uncategorised rather than being shuffled
+        // into a category nobody chose for them.
         var stranded = await db.TodoItems
             .Where(i => i.CategoryId == request.CategoryId)
             .ToListAsync(ct);
 
         foreach (var item in stranded)
         {
-            item.Edit(item.Text, fallback.Id, item.DueOn);
+            item.Edit(item.Text, null, item.DueOn);
         }
 
         type.RemoveCategory(request.CategoryId);

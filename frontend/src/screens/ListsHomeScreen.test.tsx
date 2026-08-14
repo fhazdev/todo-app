@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals'
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ListsHomeScreen } from './ListsHomeScreen'
 import { renderWithProviders } from '@/test/render'
 import { listSummary } from '@/test/fixtures'
@@ -20,7 +21,7 @@ function withAuth(ui: ReactElement) {
 }
 
 const fetchMock = jest.fn<() => Promise<Response>>()
-globalThis.fetch = fetchMock as unknown as typeof fetch
+globalThis.fetch = fetchMock
 
 function respondWith(body: unknown) {
   fetchMock.mockResolvedValue({
@@ -64,6 +65,16 @@ describe('ListsHomeScreen', () => {
     renderWithProviders(withAuth(<ListsHomeScreen />))
 
     await waitFor(() => expect(screen.getByText('No lists yet')).toBeInTheDocument())
+  })
+
+  it('signs out from the header', async () => {
+    respondWith([])
+    renderWithProviders(withAuth(<ListsHomeScreen />))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    // Clearing the session is all this screen does; RequireAuth is what redirects.
+    expect(auth.signOut).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces a failure with a retry', async () => {

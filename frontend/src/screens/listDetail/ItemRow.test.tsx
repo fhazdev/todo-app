@@ -67,6 +67,17 @@ describe('ItemRow', () => {
     expect(screen.getByText('Bananas')).toBeInTheDocument()
   })
 
+  it('hides the chip under a header while keeping the category checkbox colour', () => {
+    renderRow({ showChip: false })
+
+    // The header above already says "Fresh produce"; repeating it on the row is noise.
+    expect(screen.queryByText('Fresh produce')).not.toBeInTheDocument()
+
+    // The circle still carries the category colour, so the row stays tied to its group.
+    const circle = screen.getByRole('checkbox', { name: 'Bananas' }).firstElementChild
+    expect(circle).toHaveStyle({ border: `2.75px solid ${produce.color}` })
+  })
+
   it('shows the due date beside the chip', () => {
     renderRow({
       item: item({ id: 'i1', text: 'Sourdough', categoryId: 'produce', dueOn: '2099-01-15' }),

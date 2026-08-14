@@ -13,6 +13,7 @@ public sealed class ListTypeConfiguration : IEntityTypeConfiguration<ListType>
         builder.Property(t => t.Name).HasMaxLength(80).IsRequired();
         builder.Property(t => t.Blurb).HasMaxLength(120);
         builder.Property(t => t.OwnerId).IsRequired();
+        builder.Property(t => t.IsDefault).IsRequired();
 
         // Categories are only ever reached through their type. EF writes straight to
         // the backing field, so the public property can stay read-only.
@@ -49,6 +50,5 @@ public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.HasIndex(c => new { c.ListTypeId, c.Name }).IsUnique();
 
         builder.Ignore(c => c.Swatch);
-        builder.Ignore(c => c.IsCatchAll);
     }
 }

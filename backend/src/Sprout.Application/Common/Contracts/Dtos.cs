@@ -14,8 +14,7 @@ public sealed record CategoryDto(
     int PaletteIndex,
     string Color,
     string Tint,
-    string Deep,
-    bool IsCatchAll)
+    string Deep)
 {
     public static CategoryDto From(Category category)
     {
@@ -27,8 +26,7 @@ public sealed record CategoryDto(
             category.PaletteIndex,
             swatch.Color,
             swatch.Tint,
-            swatch.Deep,
-            category.IsCatchAll);
+            swatch.Deep);
     }
 }
 
@@ -38,10 +36,17 @@ public sealed record ListTypeDto(
     string Name,
     string? Blurb,
     IReadOnlyList<CategoryDto> Categories,
-    int ListCount)
+    int ListCount,
+    bool IsDefault)
 {
     public static ListTypeDto From(ListType type, int listCount = 0) =>
-        new(type.Id, type.Name, type.Blurb, [.. type.OrderedCategories.Select(CategoryDto.From)], listCount);
+        new(
+            type.Id,
+            type.Name,
+            type.Blurb,
+            [.. type.OrderedCategories.Select(CategoryDto.From)],
+            listCount,
+            type.IsDefault);
 }
 
 /// <summary>One row on the Shared with screen.</summary>
@@ -60,7 +65,7 @@ public sealed record MemberDto(
 public sealed record TodoItemDto(
     Guid Id,
     string Text,
-    Guid CategoryId,
+    Guid? CategoryId,
     DateOnly? DueOn,
     bool IsCompleted,
     int Position)

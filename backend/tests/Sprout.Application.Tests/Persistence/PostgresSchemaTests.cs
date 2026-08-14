@@ -99,6 +99,70 @@ public class PostgresSchemaTests
     }
 
     [SkippableFact]
+    public async Task Clearing_items_and_deleting_their_category_saves_in_the_right_order()
+    {
+        await using var db = await ConnectOrSkipAsync();
+
+        var owner = NewUser($"delcat-{Guid.CreateVersion7():N}@example.com", "Del Cat", "DC");
+        db.Users.Add(owner);
+
+        var type = ListType.CreateWithCategories(
+            owner.Id, $"Type {Guid.CreateVersion7():N}", null, "Fiction");
+        db.ListTypes.Add(type);
+
+        var fiction = type.OrderedCategories[0];
+        var list = TodoList.Create(owner.Id, "Someday", type.Id);
+        var item = list.AddItem("Piranesi", fiction.Id, null, owner.Id);
+        db.TodoLists.Add(list);
+
+        await db.SaveChangesAsync();
+
+        // Both changes go in one SaveChanges, and the order is EF's to get right.
+        // todo_items.category_id has no navigation on either entity, so unless the
+        // relationship itself is declared EF batches the category DELETE ahead of
+        // the item UPDATE and Postgres rejects it on the RESTRICT foreign key. No
+        // in-memory test can catch that, because nothing enforces the key there.
+        item.Edit(item.Text, null, item.DueOn);
+        type.RemoveCategory(fiction.Id);
+
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        (await db.TodoItems.SingleAsync(i => i.Id == item.Id)).CategoryId.ShouldBeNull();
+        (await db.Categories.AnyAsync(c => c.Id == fiction.Id)).ShouldBeFalse();
+    }
+
+    [SkippableFact]
+    public async Task An_uncategorised_item_round_trips_as_null()
+    {
+        await using var db = await ConnectOrSkipAsync();
+
+        var owner = NewUser($"loose-{Guid.CreateVersion7():N}@example.com", "Loose End", "LE");
+        db.Users.Add(owner);
+
+        // A type with no categories at all, as the Default list now ships.
+        var type = ListType.Create(owner.Id, $"Default list {Guid.CreateVersion7():N}", "Anything at all");
+        db.ListTypes.Add(type);
+
+        var list = TodoList.Create(owner.Id, "Bits and bobs", type.Id);
+        var item = list.AddItem("Ring the vet", null, null, owner.Id);
+        db.TodoLists.Add(list);
+
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var reread = await db.TodoItems.SingleAsync(i => i.Id == item.Id);
+        reread.CategoryId.ShouldBeNull();
+
+        var rereadType = await db.ListTypes
+            .Include(t => t.Categories)
+            .SingleAsync(t => t.Id == type.Id);
+
+        rereadType.Categories.ShouldBeEmpty();
+        TodoList.IsPlain([reread], rereadType).ShouldBeTrue();
+    }
+
+    [SkippableFact]
     public async Task The_database_refuses_a_second_owner_on_one_list()
     {
         await using var db = await ConnectOrSkipAsync();

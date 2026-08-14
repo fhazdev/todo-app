@@ -19,7 +19,7 @@ and sits in a centred column of that width on a desktop browser.
 | Auth | ASP.NET Identity, self-issued JWT with rotating refresh tokens, Google sign-in |
 | Web | React 19, TypeScript, Vite, Tailwind v4, TanStack Query, React Router 7 |
 | Database | Neon Postgres in production, a Postgres container locally |
-| Tests | xUnit (82) and Jest + Testing Library (41) |
+| Tests | xUnit (95) and Jest + Testing Library (59) |
 | Hosting | Docker containers on a VPS, nginx serving the SPA and proxying the API |
 
 ---
@@ -37,9 +37,9 @@ docker compose up api web              # http://localhost:5173
 The API is on `http://localhost:5080`, with its OpenAPI reference at
 `http://localhost:5080/scalar` in development.
 
-Registering an account seeds it with the three types from the handoff (Grocery
-list, Movie & show list, Default list) and their categories, so the first list
-you create has something to choose from.
+Registering an account seeds it with the three types from the handoff. Grocery
+list and Movie & show list bring their categories; **Default list** is offered
+first and has none, so a new list is a plain checklist until you decide otherwise.
 
 ### Running the pieces directly
 
@@ -54,9 +54,15 @@ cd frontend && npm install && npm run dev
 ### Tests
 
 ```bash
-cd backend  && dotnet test    # 82 tests
-cd frontend && npm test       # 41 tests
+cd backend  && dotnet test    # 95 tests
+cd frontend && npm test       # 59 tests
 ```
+
+The web app also has `npm run typecheck` and `npm run lint`. Linting is type-aware,
+so it needs the same tsconfigs the build uses; the rules that earn their place are
+the ones the compiler cannot see, chiefly hook dependency arrays and unawaited
+promises. The codebase marks deliberate fire-and-forget calls with `void`, and
+`no-floating-promises` is what keeps that a rule rather than a habit.
 
 The backend suite includes tests that run against a real Postgres. They skip
 themselves when none is reachable, so `dotnet test` is green either way; start the
@@ -102,7 +108,7 @@ Identity tables and Sprout's own, and lets the SQL express rules EF cannot:
   `user_id` and half a null `invited_email`
 - one owner per list, as a partial unique index on `role = 0`
 - `todo_items.category_id` referencing `categories` with `ON DELETE RESTRICT`,
-  which is what forces the delete-category path to rehome items first
+  which is what forces the delete-category path to clear its items first
 
 The risk with this split is silent drift, so two tests guard it:
 
@@ -146,17 +152,47 @@ first and completed ones last. The client only decides where category headers go
 That keeps the four sort comparators, including the type's custom category order,
 in one tested place rather than duplicated in TypeScript.
 
-### The uncategorised rule
+### Categories are optional
 
-A list whose items all sit in its type's catch-all category renders with no
-category chrome at all: no headers, no chips, no dots, and checkboxes fall back to
-the accent colour. One item in a real category brings the grouping back. The
-server computes this as `isPlain` so both sides cannot disagree about it.
+An item's `category_id` is nullable and a type may have none at all, which is how
+the seeded **Default list** ships: a plain checklist. The handoff faked this with a
+catch-all category named "Uncategorised" plus a rule that hid the chrome whenever
+every item sat in it. That name carried behaviour, which meant renaming a category
+could silently change how a list rendered. It is retired: there is now one way to
+be uncategorised instead of two.
+
+A list renders with no category chrome, `isPlain`, when nothing on it sits in a
+category the type still has. That covers an empty list, a list of loose items, and
+one whose categories were deleted. A single filed item brings the grouping back.
+Uncategorised items trail the filed ones in a group with no header.
+
+Deleting a category clears its items rather than rehoming them, so nothing is
+filed somewhere the user did not choose. The last category can go too.
+
+A row drops its category chip when it sits under a category header, which already
+names the group; it keeps the chip under any other sort, and in the completed
+section, where no headers are drawn. The checkbox takes the category colour either
+way, so a row never loses its tie to its group.
+
+### One default type per account
+
+Registration seeds three types, and one of them is marked `is_default`. That flag,
+not creation order, is what puts the default kind at the top of New list and
+preselects it. `ListType` cannot see its siblings, so "only one per account" is a
+partial unique index on `owner_id` rather than a domain rule.
+
+Categories can be renamed from the type screen. Renaming deliberately does not
+reorder, so no list re-groups behind the user; only moving a category does that.
 
 ### 404 rather than 403
 
 Asking for a list you are not a member of returns 404. A 403 would confirm the
 list exists, which is a membership oracle on a sharing feature.
+
+Once you *are* a member, the reason is safe to give: an editor who tries to rename
+or delete the list gets a 403 saying so, because they already know it exists. Only
+the owner can delete a list, and the screen hides the control from everyone else
+rather than letting the server be the first to say no.
 
 ---
 

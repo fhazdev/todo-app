@@ -130,33 +130,50 @@ public class TodoListTests
     }
 
     [Fact]
-    public void A_list_whose_items_all_sit_in_the_catch_all_is_plain()
+    public void A_list_of_uncategorised_items_is_plain()
     {
-        var type = ListType.Create(Owner, "Reading list"); // seeded with Uncategorised
+        var type = ListType.Create(Owner, "Reading list"); // no categories at all
         var list = TodoList.Create(Owner, "Someday", type.Id);
-        var catchAll = type.OrderedCategories[0].Id;
 
-        list.AddItem("Piranesi", catchAll, null, Owner);
-        list.AddItem("The Dispossessed", catchAll, null, Owner);
+        list.AddItem("Piranesi", null, null, Owner);
+        list.AddItem("The Dispossessed", null, null, Owner);
 
         TodoList.IsPlain(list.Items, type).ShouldBeTrue();
     }
 
     [Fact]
-    public void One_real_category_brings_the_grouping_back()
+    public void One_filed_item_brings_the_grouping_back()
     {
         var type = ListType.Create(Owner, "Reading list");
-        var catchAll = type.OrderedCategories[0].Id;
         var fiction = type.AddCategory("Fiction");
 
         var list = TodoList.Create(Owner, "Someday", type.Id);
-        list.AddItem("Piranesi", catchAll, null, Owner);
+        list.AddItem("Piranesi", null, null, Owner);
 
+        // A category existing is not enough; nothing is filed under it yet.
         TodoList.IsPlain(list.Items, type).ShouldBeTrue();
 
         list.AddItem("The Dispossessed", fiction.Id, null, Owner);
 
         TodoList.IsPlain(list.Items, type).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_list_whose_categories_were_all_deleted_goes_back_to_plain()
+    {
+        var type = ListType.CreateWithCategories(Owner, "Reading list", null, "Fiction");
+        var fiction = type.OrderedCategories[0];
+
+        var list = TodoList.Create(Owner, "Someday", type.Id);
+        list.AddItem("Piranesi", fiction.Id, null, Owner);
+
+        TodoList.IsPlain(list.Items, type).ShouldBeFalse();
+
+        // The item still points at the dead id; with nothing to resolve it to, there
+        // is no header to draw, so the list reads as plain again.
+        type.RemoveCategory(fiction.Id);
+
+        TodoList.IsPlain(list.Items, type).ShouldBeTrue();
     }
 
     [Fact]

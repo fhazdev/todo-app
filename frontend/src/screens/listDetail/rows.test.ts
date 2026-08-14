@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals'
 import { buildRows, formatDue } from './rows'
-import { catchAllType, groceryType, item, listDetail } from '@/test/fixtures'
+import { groceryType, item, listDetail, plainType } from '@/test/fixtures'
 import type { TodoItem } from '@/api/types'
 
 /**
@@ -50,16 +50,44 @@ describe('buildRows', () => {
   it('keeps category chips on the rows when the sort is not By category', () => {
     const rows = buildRows(listDetail({ sort: 'MyOrder' }), open)
 
-    expect(rows[0]).toMatchObject({ kind: 'item', category: groceryType.categories[0] })
+    expect(rows[0]).toMatchObject({
+      kind: 'item',
+      category: groceryType.categories[0],
+      showChip: true,
+    })
+  })
+
+  it('drops the chip from rows sitting under a header that already names them', () => {
+    const rows = buildRows(listDetail({ sort: 'Category' }), open)
+
+    // Every grouped row keeps its category, for the checkbox colour, but hides the
+    // chip: the header above it says "Fresh produce" already.
+    const grouped = rows.filter((row) => row.kind === 'item')
+    expect(grouped).toHaveLength(3)
+    expect(grouped.every((row) => row.kind === 'item' && row.category !== null)).toBe(true)
+    expect(grouped.every((row) => row.kind === 'item' && row.showChip === false)).toBe(true)
+  })
+
+  it('keeps the chip on the headerless uncategorised rows', () => {
+    const loose = item({ id: 'loose', text: 'Batteries', categoryId: null })
+    const rows = buildRows(listDetail({ sort: 'Category' }), [...open, loose])
+
+    expect(rows.at(-1)).toMatchObject({ kind: 'item', category: null, showChip: true })
   })
 
   it('strips every trace of category on a plain list', () => {
     // The uncategorised rule: no headers, no chips, no dots.
-    const plain = listDetail({ isPlain: true, type: catchAllType, sort: 'Category' })
-    const rows = buildRows(plain, [item({ id: 'x', text: 'Piranesi', categoryId: 'uncategorised' })])
+    const plain = listDetail({ isPlain: true, type: plainType, sort: 'Category' })
+    const rows = buildRows(plain, [item({ id: 'x', text: 'Piranesi', categoryId: null })])
 
     expect(rows).toEqual([
-      { kind: 'item', key: 'x', item: expect.objectContaining({ text: 'Piranesi' }), category: null },
+      {
+        kind: 'item',
+        key: 'x',
+        item: expect.objectContaining({ text: 'Piranesi' }),
+        category: null,
+        showChip: true,
+      },
     ])
   })
 
@@ -70,6 +98,29 @@ describe('buildRows', () => {
     const last = rows.at(-1)
     expect(last).toMatchObject({ kind: 'item', category: null })
     expect(last && last.kind === 'item' && last.item.text).toBe('Left behind')
+  })
+
+  it('trails uncategorised items after the filed ones, with no header', () => {
+    const loose = item({ id: 'loose', text: 'Batteries', categoryId: null })
+    const rows = buildRows(listDetail({ sort: 'Category' }), [...open, loose])
+
+    const last = rows.at(-1)
+    expect(last).toMatchObject({ kind: 'item', category: null })
+    expect(last && last.kind === 'item' && last.item.text).toBe('Batteries')
+
+    // The filed items keep their headers; only the loose one goes without.
+    expect(rows.filter((row) => row.kind === 'header')).toHaveLength(2)
+  })
+
+  it('draws no headers at all for a type that groups nothing', () => {
+    const list = listDetail({ isPlain: true, type: plainType, sort: 'Category' })
+    const rows = buildRows(list, [
+      item({ id: 'a', text: 'Ring the vet', categoryId: null }),
+      item({ id: 'b', text: 'Book the MOT', categoryId: null }),
+    ])
+
+    expect(rows.every((row) => row.kind === 'item' && row.category === null)).toBe(true)
+    expect(rows).toHaveLength(2)
   })
 })
 
