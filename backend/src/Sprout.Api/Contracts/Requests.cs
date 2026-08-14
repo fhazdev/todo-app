@@ -38,6 +38,9 @@ public sealed record SetShowCompletedRequest(bool ShowCompleted);
 
 public sealed record AddItemRequest(string Text, Guid? CategoryId, DateOnly? DueOn);
 
-public sealed record UpdateItemRequest(string Text, Guid CategoryId, DateOnly? DueOn);
+// Nullable, so an edit can clear a category as well as change it.
+public sealed record UpdateItemRequest(string Text, Guid? CategoryId, DateOnly? DueOn);
+
+public sealed record SetItemQuantityRequest(int Quantity);
 
 public sealed record InviteMemberRequest(string Email);

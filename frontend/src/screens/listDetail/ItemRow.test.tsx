@@ -78,6 +78,66 @@ describe('ItemRow', () => {
     expect(circle).toHaveStyle({ border: `2.75px solid ${produce.color}` })
   })
 
+  describe('quantity stepper', () => {
+    function renderStepper(quantity: number) {
+      const onQuantityChange = jest.fn()
+
+      render(
+        <ul>
+          <ItemRow
+            item={item({ id: 'i1', text: 'Bananas', categoryId: 'produce', quantity })}
+            category={produce}
+            onToggle={jest.fn()}
+            onQuantityChange={onQuantityChange}
+          />
+        </ul>,
+      )
+
+      return { onQuantityChange }
+    }
+
+    it('shows the quantity, including when it is one', () => {
+      renderStepper(1)
+
+      expect(screen.getByLabelText('Quantity 1')).toHaveTextContent('1')
+    })
+
+    it('asks for one more when + is tapped', async () => {
+      const { onQuantityChange } = renderStepper(2)
+
+      await userEvent.click(screen.getByRole('button', { name: 'More Bananas' }))
+
+      expect(onQuantityChange).toHaveBeenCalledWith(3)
+    })
+
+    it('asks for one fewer when − is tapped', async () => {
+      const { onQuantityChange } = renderStepper(2)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Fewer Bananas' }))
+
+      expect(onQuantityChange).toHaveBeenCalledWith(1)
+    })
+
+    it('will not go below one', async () => {
+      const { onQuantityChange } = renderStepper(1)
+
+      const fewer = screen.getByRole('button', { name: 'Fewer Bananas' })
+      expect(fewer).toBeDisabled()
+
+      await userEvent.click(fewer)
+
+      // Zero of something is a deletion, which is a different action entirely.
+      expect(onQuantityChange).not.toHaveBeenCalled()
+    })
+
+    it('draws no stepper at all when no handler is given', () => {
+      renderRow()
+
+      expect(screen.queryByRole('button', { name: 'More Bananas' })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/^Quantity/)).not.toBeInTheDocument()
+    })
+  })
+
   it('shows the due date beside the chip', () => {
     renderRow({
       item: item({ id: 'i1', text: 'Sourdough', categoryId: 'produce', dueOn: '2099-01-15' }),

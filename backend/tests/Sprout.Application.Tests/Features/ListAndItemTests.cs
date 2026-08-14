@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using Sprout.Application.Common.Exceptions;
 using Sprout.Application.Features.Items;
@@ -89,6 +90,99 @@ public class ListAndItemTests
 
         (await Items(h).Handle(new ToggleItemCommand(list.Id, item.Id), default)).IsCompleted.ShouldBeTrue();
         (await Items(h).Handle(new ToggleItemCommand(list.Id, item.Id), default)).IsCompleted.ShouldBeFalse();
+    }
+
+    // ── Quantity ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Setting_a_quantity_persists_it()
+    {
+        using var h = new TestHarness();
+        var type = await h.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await h.GivenListAsync("Groceries", type);
+        var item = await Items(h).Handle(new AddItemCommand(list.Id, "Lettuce", null, null), default);
+
+        item.Quantity.ShouldBe(1);
+
+        var updated = await Items(h).Handle(
+            new SetItemQuantityCommand(list.Id, item.Id, 3), default);
+        h.Detach();
+
+        updated.Quantity.ShouldBe(3);
+        (await h.Db.TodoItems.SingleAsync(i => i.Id == item.Id)).Quantity.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_quantity_below_the_floor_is_refused_by_the_handler()
+    {
+        using var h = new TestHarness();
+        var type = await h.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await h.GivenListAsync("Groceries", type);
+        var item = await Items(h).Handle(new AddItemCommand(list.Id, "Lettuce", null, null), default);
+
+        // The validator normally catches this first in the pipeline. The handler is
+        // called directly here, which is the point: the entity refuses it too, so a
+        // caller that skips validation cannot write a zero.
+        await Should.ThrowAsync<Sprout.Domain.Common.DomainException>(() =>
+            Items(h).Handle(new SetItemQuantityCommand(list.Id, item.Id, 0), default));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(-3, false)]
+    [InlineData(1, true)]
+    [InlineData(999, true)]
+    [InlineData(1000, false)]
+    public void The_quantity_validator_bounds_the_value(int quantity, bool expectedValid)
+    {
+        var result = new SetItemQuantityCommandValidator()
+            .Validate(new SetItemQuantityCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), quantity));
+
+        result.IsValid.ShouldBe(expectedValid);
+    }
+
+    [Fact]
+    public async Task An_editor_can_change_a_quantity()
+    {
+        using var owner = new TestHarness();
+        var type = await owner.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await owner.GivenListAsync("Groceries", type);
+        var item = list.AddItem("Lettuce", null, null, owner.UserId);
+        await owner.Db.SaveChangesAsync();
+
+        using var editor = new TestHarness();
+        list.AddMember(editor.UserId, ListRole.Editor);
+        await owner.Db.SaveChangesAsync();
+
+        // Deliberately not owner-only: whoever can add items can say how many.
+        var handlers = new ItemCommandHandlers(
+            owner.Db,
+            editor.CurrentUser,
+            new Common.Services.ListAccess(owner.Db, editor.Identity));
+
+        var updated = await handlers.Handle(
+            new SetItemQuantityCommand(list.Id, item.Id, 5), default);
+
+        updated.Quantity.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task A_non_member_cannot_change_a_quantity()
+    {
+        using var owner = new TestHarness();
+        var type = await owner.GivenTypeAsync("Grocery list", "Dairy");
+        var list = await owner.GivenListAsync("Groceries", type);
+        var item = list.AddItem("Lettuce", null, null, owner.UserId);
+        await owner.Db.SaveChangesAsync();
+
+        using var stranger = new TestHarness();
+        var handlers = new ItemCommandHandlers(
+            owner.Db,
+            stranger.CurrentUser,
+            new Common.Services.ListAccess(owner.Db, stranger.Identity));
+
+        await Should.ThrowAsync<NotFoundException>(() =>
+            handlers.Handle(new SetItemQuantityCommand(list.Id, item.Id, 5), default));
     }
 
     // ── Access ────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ and sits in a centred column of that width on a desktop browser.
 | Auth | ASP.NET Identity, self-issued JWT with rotating refresh tokens, Google sign-in |
 | Web | React 19, TypeScript, Vite, Tailwind v4, TanStack Query, React Router 7 |
 | Database | Neon Postgres in production, a Postgres container locally |
-| Tests | xUnit (95) and Jest + Testing Library (59) |
+| Tests | xUnit (118) and Jest + Testing Library (67) |
 | Hosting | Docker containers on a VPS, nginx serving the SPA and proxying the API |
 
 ---
@@ -54,8 +54,8 @@ cd frontend && npm install && npm run dev
 ### Tests
 
 ```bash
-cd backend  && dotnet test    # 95 tests
-cd frontend && npm test       # 59 tests
+cd backend  && dotnet test    # 118 tests
+cd frontend && npm test       # 67 tests
 ```
 
 The web app also has `npm run typecheck` and `npm run lint`. Linting is type-aware,
@@ -173,6 +173,18 @@ A row drops its category chip when it sits under a category header, which alread
 names the group; it keeps the chip under any other sort, and in the completed
 section, where no headers are drawn. The checkbox takes the category colour either
 way, so a row never loses its tie to its group.
+
+### Item quantity
+
+Items carry a quantity, shown next to the text and adjusted with a stepper. The
+floor of 1 is stated three times on purpose: the `−` button disables, the server
+rejects it as a field error the stepper can display, and `ck_todo_items_quantity`
+refuses it in SQL. A stepper is a UI control, and it should not be the only thing
+keeping a zero out of the table. Zero of something is a deletion, which is a
+different action.
+
+Changes apply optimistically, as completion toggles do, because a stepper that
+waits for a round trip feels broken when tapped repeatedly.
 
 ### One default type per account
 

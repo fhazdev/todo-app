@@ -102,6 +102,44 @@ export function useToggleItem(listId: string) {
   })
 }
 
+/**
+ * Changing how many of an item, applied to the cache first. Same reasoning as the
+ * completion toggle: a stepper that waits for a round trip before the number moves
+ * feels broken, especially when tapped repeatedly.
+ */
+export function useSetItemQuantity(listId: string) {
+  const client = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
+      api.put<TodoItem>(`/api/lists/${listId}/items/${itemId}/quantity`, { quantity }),
+
+    onMutate: async ({ itemId, quantity }) => {
+      await client.cancelQueries({ queryKey: keys.list(listId) })
+      const previous = client.getQueryData<TodoListDetail>(keys.list(listId))
+
+      client.setQueryData<TodoListDetail>(keys.list(listId), (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === itemId ? { ...item, quantity } : item,
+              ),
+            }
+          : current,
+      )
+
+      return { previous }
+    },
+
+    onError: (_error, _input, context) => {
+      if (context?.previous) client.setQueryData(keys.list(listId), context.previous)
+    },
+
+    onSettled: () => void client.invalidateQueries({ queryKey: keys.list(listId) }),
+  })
+}
+
 export function useAddItem(listId: string) {
   const client = useQueryClient()
 

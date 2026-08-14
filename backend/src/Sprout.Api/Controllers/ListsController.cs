@@ -128,6 +128,18 @@ public sealed class ListsController(ISender mediator) : ApiControllerBase(mediat
         Ok(await Mediator.Send(
             new UpdateItemCommand(listId, itemId, request.Text, request.CategoryId, request.DueOn), ct));
 
+    /// <summary>Sets how many of an item. Any member may change it; the floor is 1.</summary>
+    [HttpPut("{listId:guid}/items/{itemId:guid}/quantity")]
+    [ProducesResponseType<TodoItemDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TodoItemDto>> SetItemQuantity(
+        Guid listId,
+        Guid itemId,
+        SetItemQuantityRequest request,
+        CancellationToken ct) =>
+        Ok(await Mediator.Send(new SetItemQuantityCommand(listId, itemId, request.Quantity), ct));
+
     [HttpDelete("{listId:guid}/items/{itemId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> DeleteItem(Guid listId, Guid itemId, CancellationToken ct)
