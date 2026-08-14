@@ -89,6 +89,22 @@ public class EndToEndTests(SproutApiFactory factory) : IClassFixture<SproutApiFa
     }
 
     [Fact]
+    public async Task Google_sign_in_says_so_plainly_when_the_server_has_no_client_id()
+    {
+        // The test host leaves GoogleAuth:ClientId empty, which is also the state of
+        // any checkout without a Google project.
+        var response = await factory.CreateClient().PostAsJsonAsync(
+            "/api/auth/google", new { idToken = "not-a-real-token" });
+
+        // 403 rather than 401: the caller's token is not the problem, the server is.
+        // A 401 would send the client off trying to re-authenticate for no reason.
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("detail").GetString().ShouldContain("not configured");
+    }
+
+    [Fact]
     public async Task An_unauthenticated_request_is_401()
     {
         var response = await factory.CreateClient().GetAsync("/api/lists");

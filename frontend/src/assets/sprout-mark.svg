@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    The sprout mark on its own, taken from sprout_favicon.svg with the opaque white
+    background removed so it sits directly on the app's ground colour (#f5ead8).
+    The favicon keeps its white plate, which a browser tab wants; this one is for
+    placing on a page.
+  -->
+  <defs>
+    <linearGradient id="sprout-leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#69D31F"/>
+      <stop offset="100%" stop-color="#18B62D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main stem and roots -->
+  <path d="M256 394 C256 330 256 268 258 208"
+        fill="none" stroke="#087A3D" stroke-width="18"
+        stroke-linecap="round"/>
+  <path d="M256 393 C207 393 167 363 167 315"
+        fill="none" stroke="#087A3D" stroke-width="18"
+        stroke-linecap="round"/>
+  <path d="M256 393 C305 393 345 363 345 315"
+        fill="none" stroke="#087A3D" stroke-width="18"
+        stroke-linecap="round"/>
+
+  <!-- Large right leaf -->
+  <path d="M264 253
+           C256 212 267 166 302 133
+           C337 100 384 82 436 78
+           C436 128 425 177 395 211
+           C365 245 324 254 264 277 Z"
+        fill="url(#sprout-leaf)"/>
+
+  <!-- Small left leaf -->
+  <path d="M251 270
+           C229 235 204 214 170 205
+           C144 198 119 201 93 210
+           C98 250 112 282 140 301
+           C169 321 205 319 244 303 Z"
+        fill="url(#sprout-leaf)"/>
+
+  <!-- Leaf/stem highlight, kept white: it reads as a specular mark on the leaf
+       rather than as background, so it works on any surface. -->
+  <path d="M256 278 C277 220 311 171 363 136"
+        fill="none" stroke="#FFFFFF" stroke-width="8"
+        stroke-linecap="round"/>
+  <path d="M247 301 C230 270 207 246 177 231"
+        fill="none" stroke="#FFFFFF" stroke-width="7"
+        stroke-linecap="round"/>
+</svg>
